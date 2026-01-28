@@ -1,0 +1,68 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+generator kysely {
+  provider = "prisma-kysely"
+  output   = "../src/db"
+  fileName = "types.ts"
+  enumFileName = "enums.ts"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+/// Concept trong taxonomy hierarchy
+model Concept {
+  id         String   @id @db.VarChar(10)
+  label      String   @db.VarChar(255)
+  definition String?  @db.Text
+  level      Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+
+  parentEdges Edge[]    @relation("ChildToParent")
+  childEdges  Edge[]    @relation("ParentToChild")
+  variants    Variant[]
+
+  @@index([label], map: "idx_label")
+  @@index([level], map: "idx_level")
+  @@index([label, level], map: "idx_label_level")
+  @@fulltext([label], map: "idx_label_fulltext")
+  @@fulltext([label, definition], map: "idx_search_fulltext")
+  @@map("concepts")
+}
+
+/// Alternative names cho concept
+model Variant {
+  id        Int      @id @default(autoincrement())
+  conceptId String   @map("concept_id") @db.VarChar(10)
+  name      String   @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  concept Concept @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+
+  @@index([conceptId], map: "idx_concept")
+  @@index([name], map: "idx_name")
+  @@fulltext([name], map: "idx_name_fulltext")
+  @@map("variants")
+}
+
+/// Edge representing parent → child relationship
+model Edge {
+  parentId  String   @map("parent_id") @db.VarChar(10)
+  childId   String   @map("child_id") @db.VarChar(10)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  parent Concept @relation("ParentToChild", fields: [parentId], references: [id], onDelete: Cascade)
+  child  Concept @relation("ChildToParent", fields: [childId], references: [id], onDelete: Cascade)
+
+  @@id([parentId, childId])
+  @@index([parentId], map: "idx_parent")
+  @@index([childId], map: "idx_child")
+  @@map("edges")
+}

@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  # MySQL Master
+  mysql-master:
+    image: mysql:8.0
+    container_name: dag-mysql-master
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass123
+      MYSQL_DATABASE: dag_db
+      MYSQL_USER: app_user
+      MYSQL_PASSWORD: apppass123
+      MYSQL_ROOT_HOST: '%' # Cho phép root connect từ xa
+    ports:
+      - '${DOCKER_MYSQL_MASTER_PORT:-13306}:3306'
+    volumes:
+      - mysql-master-data:/var/lib/mysql
+      - ./mysql/master/my.cnf:/etc/mysql/my.cnf
+      - ./mysql/init-master.sql:/docker-entrypoint-initdb.d/init.sql
+    command: --default-authentication-plugin=mysql_native_password
+    networks:
+      - dag-network
+
+  # MySQL Slave 1
+  mysql-slave1:
+    image: mysql:8.0
+    container_name: dag-mysql-slave1
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass123
+      MYSQL_DATABASE: dag_db
+      MYSQL_ROOT_HOST: '%' # Cho phép root connect từ xa
+    ports:
+      - '${DOCKER_MYSQL_SLAVE1_PORT:-13307}:3306'
+    volumes:
+      - mysql-slave1-data:/var/lib/mysql
+      - ./mysql/slave/my.cnf:/etc/mysql/my.cnf
+    # Override server-id here directly
+    command: --default-authentication-plugin=mysql_native_password --server-id=2
+    depends_on:
+      - mysql-master
+    networks:
+      - dag-network
+
+  # MySQL Slave 2
+  mysql-slave2:
+    image: mysql:8.0
+    container_name: dag-mysql-slave2
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass123
+      MYSQL_DATABASE: dag_db
+      MYSQL_ROOT_HOST: '%' # Cho phép root connect từ xa
+    ports:
+      - '${DOCKER_MYSQL_SLAVE2_PORT:-13308}:3306'
+    volumes:
+      - mysql-slave2-data:/var/lib/mysql
+      - ./mysql/slave/my.cnf:/etc/mysql/my.cnf
+    # Override server-id here directly
+    command: --default-authentication-plugin=mysql_native_password --server-id=3
+    depends_on:
+      - mysql-master
+    networks:
+      - dag-network
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: dag-redis
+    ports:
+      - '${DOCKER_REDIS_PORT:-16379}:6379'
+    volumes:
+      - redis-data:/data
+    networks:
+      - dag-network
+
+  # Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: dag-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - 'ES_JAVA_OPTS=-Xms512m -Xmx512m'
+    ports:
+      - '${DOCKER_ELASTICSEARCH_PORT:-19200}:9200'
+      - '${DOCKER_ELASTICSEARCH_TRANSPORT_PORT:-19300}:9300'
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    networks:
+      - dag-network
+
+  # Kibana
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: dag-kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - '${DOCKER_KIBANA_PORT:-15601}:5601'
+    depends_on:
+      - elasticsearch
+    networks:
+      - dag-network
+
+volumes:
+  mysql-master-data:
+  mysql-slave1-data:
+  mysql-slave2-data:
+  redis-data:
+  es-data:
+
+networks:
+  dag-network:
+    driver: bridge

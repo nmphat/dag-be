@@ -1,0 +1,25 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { ConceptsModule } from './concepts/concepts.module';
+import { DatabaseModule } from './database/database.module';
+import { EdgesModule } from './edges/edges.module';
+import { HealthController } from './health.controller';
+import { SearchModule } from './search/search.module';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
+    DatabaseModule,
+    SearchModule,
+    EdgesModule,
+    ConceptsModule,
+  ],
+  controllers: [AppController, HealthController],
+  providers: [AppService],
+})
+export class AppModule {}
