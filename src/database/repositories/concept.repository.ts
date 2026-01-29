@@ -238,7 +238,7 @@ export class ConceptRepository {
   }
 
   async getPathsToRoot(conceptId: string): Promise<DomainConcept[][]> {
-    // 1. Recursive CTE
+    // 1. Recursive CTE - find all paths to root
     const pathResults = await this.databaseService.db.executeRead((trx) =>
       trx
         .withRecursive('path_cte', (db) =>
@@ -246,8 +246,10 @@ export class ConceptRepository {
             .selectFrom('edges')
             .select([
               'parent_id',
-              'child_id',
-              sql<string>`CAST(parent_id AS CHAR(1000))`.as('path_str'),
+              // Path: conceptId -> parent (start building from concept)
+              sql<string>`CAST(CONCAT(${sql.literal(conceptId)}, ',', parent_id) AS CHAR(10000))`.as(
+                'path_str',
+              ),
             ])
             .where('child_id', '=', conceptId)
             .unionAll((db) =>
@@ -256,8 +258,8 @@ export class ConceptRepository {
                 .innerJoin('path_cte as cte', 'e.child_id', 'cte.parent_id')
                 .select([
                   'e.parent_id',
-                  'e.child_id',
-                  sql<string>`CONCAT(e.parent_id, ',', cte.path_str)`.as(
+                  // Append next parent to path
+                  sql<string>`CONCAT(cte.path_str, ',', e.parent_id)`.as(
                     'path_str',
                   ),
                 ]),
@@ -265,21 +267,36 @@ export class ConceptRepository {
         )
         .selectFrom('path_cte')
         .select('path_str')
+        // KEY FIX: Only select paths ending at ROOT (parent_id has no parents)
+        .where(({ eb, not, exists }) =>
+          not(
+            exists(
+              eb
+                .selectFrom('edges')
+                .select(sql.literal(1).as('one'))
+                .whereRef('edges.child_id', '=', 'path_cte.parent_id'),
+            ),
+          ),
+        )
         .execute(),
     );
 
-    if (pathResults.length === 0) return [];
+    if (pathResults.length === 0) {
+      // Check if conceptId itself is a root
+      const concept = await this.findById(conceptId);
+      return concept ? [[concept]] : [];
+    }
 
-    // 2. Extract IDs
+    // 2. Extract all unique IDs
     const allPathIds = new Set<string>();
     pathResults.forEach((row) => {
-      const pathStr = (row as any).pathStr || (row as any).path_str;
-      if (pathStr)
-        pathStr.split(',').forEach((id: string) => allPathIds.add(id));
+      const pathStr = (row as any).path_str || (row as any).pathStr;
+      if (pathStr) {
+        pathStr.split(',').forEach((id: string) => allPathIds.add(id.trim()));
+      }
     });
-    allPathIds.add(conceptId);
 
-    // 3. Fetch Concepts
+    // 3. Fetch all concepts in batch
     const conceptsMapRes = await this.databaseService.db.executeRead((trx) =>
       trx
         .selectFrom('concepts')
@@ -291,19 +308,23 @@ export class ConceptRepository {
     const conceptMap = new Map(
       conceptsMapRes.map((c) => [c.id, this.mapToDomainConcept(c)]),
     );
-    const targetNode = conceptMap.get(conceptId);
 
-    if (!targetNode) return [];
+    // 4. Reconstruct paths: [conceptId, parent1, parent2, ..., root]
+    return pathResults
+      .map((row) => {
+        const pathStr = (row as any).path_str || (row as any).pathStr;
+        if (!pathStr) return null;
 
-    // 4. Reconstruct Paths
-    return pathResults.map((row) => {
-      const pathStr = (row as any).pathStr || (row as any).path_str;
-      const ids = pathStr.split(',');
-      const pathObjects = ids
-        .map((id: string) => conceptMap.get(id))
-        .filter((c: DomainConcept | undefined): c is DomainConcept => !!c);
-      return [...pathObjects, targetNode];
-    });
+        const ids = pathStr.split(',').map((id: string) => id.trim());
+        const pathObjects = ids
+          .map((id: string) => conceptMap.get(id))
+          .filter((c): c is DomainConcept => !!c);
+
+        return pathObjects;
+      })
+      .filter(
+        (path): path is DomainConcept[] => path !== null && path.length > 0,
+      );
   }
 
   // --- MAPPERS ---

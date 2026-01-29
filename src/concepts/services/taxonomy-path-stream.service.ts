@@ -50,7 +50,6 @@ export class TaxonomyPathStreamService {
     const maxDepth = options.maxDepth ?? this.DEFAULT_MAX_DEPTH;
     const maxPaths = options.maxPaths ?? this.DEFAULT_MAX_PATHS;
 
-    // Verify concept exists and get its level
     const startConcept = await this.getConceptCached(conceptId);
     if (!startConcept) {
       throw new NotFoundException(`Concept ${conceptId} not found`);
@@ -59,29 +58,23 @@ export class TaxonomyPathStreamService {
     let pathsFound = 0;
     let nodesProcessed = 0;
 
-    // Iterative DFS
-    // stack stores the current branch being explored
-    const stack: Array<{
-      nodeId: string;
-      pathIds: string[];
-      depth: number;
-    }> = [{ nodeId: conceptId, pathIds: [], depth: 0 }];
+    /**
+     * Recursive backtracking DFS
+     * @param nodeId - Current node
+     * @param currentPath - Path from start concept to current node
+     * @param depth - Current depth
+     */
+    const dfs = async (
+      nodeId: string,
+      currentPath: string[],
+      depth: number,
+    ): Promise<void> => {
+      // Stop if max paths reached
+      if (pathsFound >= maxPaths) return;
 
-    while (stack.length > 0) {
-      if (pathsFound >= maxPaths) break;
-
-      const { nodeId, pathIds, depth } = stack.pop()!;
-      const newPathIds = [...pathIds, nodeId];
       nodesProcessed++;
 
-      // Eager emission: emit path for every node visited (Legacy behavior)
-      const path = await this.resolvePathIds(newPathIds);
-      // delay 2000ms
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      subject.next({ type: 'path', path });
-      pathsFound++;
-
-      // Emit progress
+      // Progress update
       if (nodesProcessed % this.PROGRESS_INTERVAL === 0) {
         subject.next({
           type: 'progress',
@@ -89,31 +82,42 @@ export class TaxonomyPathStreamService {
         });
       }
 
-      // Optimization: Get level to check if it's already a root
-      const currentConcept = await this.getConceptCached(nodeId);
-      const isRootByLevel = currentConcept?.level === 0;
-
-      if (isRootByLevel || depth >= maxDepth) {
-        // Stop traversal here, path already emitted above
-        continue;
+      // Depth limit → emit partial path
+      if (depth >= maxDepth) {
+        const resolvedPath = await this.resolvePathIds(currentPath);
+        subject.next({ type: 'path', path: resolvedPath });
+        pathsFound++;
+        return;
       }
 
-      // Fetch parents to continue DFS
+      // Get parents
       const parents = await this.getParentsCached(nodeId);
 
+      // ROOT (no parents) → emit complete path
+      if (parents.length === 0) {
+        const resolvedPath = await this.resolvePathIds(currentPath);
+        subject.next({ type: 'path', path: resolvedPath });
+        pathsFound++;
+        return;
+      }
+
+      // Recursive: explore each parent
       for (const parentId of parents) {
+        if (pathsFound >= maxPaths) return;
+
         // Cycle detection
-        if (newPathIds.includes(parentId)) {
-          console.warn(`Cycle detected at ${nodeId} -> ${parentId}`);
+        if (currentPath.includes(parentId)) {
+          console.warn(`Cycle: ${parentId} in path`);
           continue;
         }
-        stack.push({
-          nodeId: parentId,
-          pathIds: newPathIds,
-          depth: depth + 1,
-        });
+
+        // Backtracking: add parent → recurse → (auto removed on return)
+        await dfs(parentId, [...currentPath, parentId], depth + 1);
       }
-    }
+    };
+
+    // Start DFS from conceptId
+    await dfs(conceptId, [conceptId], 0);
 
     subject.next({
       type: 'done',
