@@ -1,13 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { Insertable, Selectable, sql, Updateable } from 'kysely';
 import { DatabaseService } from '../../db/database.service';
-
 import { DB } from '../../db/types';
-import { DomainConcept, DomainVariant } from './domain.types';
+import { DomainConcept } from './domain.types';
 
-// -- Database Types (Kysely) --
+// -- Database Types --
 type ConceptTable = DB['concepts'];
-type VariantTable = DB['variants'];
 type NewConcept = Insertable<ConceptTable>;
 type ConceptUpdate = Updateable<ConceptTable>;
 
@@ -16,19 +14,16 @@ export class ConceptRepository {
   constructor(private readonly databaseService: DatabaseService) {}
 
   // ============================================
-  // BASIC CRUD (Kysely Write Master)
+  // BASIC CRUD (Master)
   // ============================================
 
   async create(data: NewConcept): Promise<DomainConcept> {
-    // 1. Write to Master
     await this.databaseService.db
       .write()
       .insertInto('concepts')
       .values(data)
       .execute();
 
-    // 2. Return Domain Object
-    // Since we generated ID in service, we construct the return object directly for perf
     return {
       id: data.id as string,
       label: data.label,
@@ -62,6 +57,16 @@ export class ConceptRepository {
         query = query.where('level', '=', params.where.level);
       }
 
+      // Implement Search Filter
+      if (params.where?.label) {
+        query = query.where((eb) =>
+          eb.or([
+            eb('label', 'like', `%${params.where?.label}%`),
+            eb('definition', 'like', `%${params.where?.label}%`),
+          ]),
+        );
+      }
+
       return query
         .orderBy('level', 'asc')
         .orderBy('label', 'asc')
@@ -73,7 +78,7 @@ export class ConceptRepository {
     return res.map(this.mapToDomainConcept);
   }
 
-  async count(where?: { level?: number }): Promise<number> {
+  async count(where?: { level?: number; label?: string }): Promise<number> {
     return this.databaseService.db.executeRead(async (trx) => {
       let query = trx
         .selectFrom('concepts')
@@ -81,6 +86,15 @@ export class ConceptRepository {
 
       if (where?.level !== undefined) {
         query = query.where('level', '=', where.level);
+      }
+
+      if (where?.label) {
+        query = query.where((eb) =>
+          eb.or([
+            eb('label', 'like', `%${where.label}%`),
+            eb('definition', 'like', `%${where.label}%`),
+          ]),
+        );
       }
 
       const res = await query.executeTakeFirst();
@@ -110,113 +124,7 @@ export class ConceptRepository {
   }
 
   // ============================================
-  // VARIANTS
-  // ============================================
-
-  async createVariant(conceptId: string, name: string): Promise<void> {
-    await this.databaseService.db
-      .write()
-      .insertInto('variants')
-      .values({
-        concept_id: conceptId,
-        name,
-        created_at: new Date(),
-      })
-      .execute();
-  }
-
-  async findVariantsByConceptId(conceptId: string): Promise<DomainVariant[]> {
-    const res = await this.databaseService.db.executeRead((trx) =>
-      trx
-        .selectFrom('variants')
-        .selectAll()
-        .where('concept_id', '=', conceptId)
-        .execute(),
-    );
-    return res.map(this.mapToDomainVariant);
-  }
-
-  async deleteVariantsByConceptId(conceptId: string): Promise<void> {
-    await this.databaseService.db
-      .write()
-      .deleteFrom('variants')
-      .where('concept_id', '=', conceptId)
-      .execute();
-  }
-
-  // ============================================
-  // NAVIGATION & DRILL-DOWN
-  // ============================================
-
-  async findChildren(
-    parentId: string,
-    limit: number,
-    offset: number,
-  ): Promise<DomainConcept[]> {
-    const res = await this.databaseService.db.executeRead((trx) =>
-      trx
-        .selectFrom('concepts')
-        .innerJoin('edges', 'edges.child_id', 'concepts.id')
-        .selectAll('concepts')
-        .where('edges.parent_id', '=', parentId)
-        .orderBy('concepts.level', 'asc')
-        .orderBy('concepts.label', 'asc')
-        .limit(limit)
-        .offset(offset)
-        .execute(),
-    );
-    return res.map(this.mapToDomainConcept);
-  }
-
-  async countChildren(parentId: string): Promise<number> {
-    return this.databaseService.db.executeRead(async (trx) => {
-      const res = await trx
-        .selectFrom('edges')
-        .where('parent_id', '=', parentId)
-        .select(trx.fn.count('child_id').as('count'))
-        .executeTakeFirst();
-      return Number(res?.count || 0);
-    });
-  }
-
-  async findParents(childId: string): Promise<DomainConcept[]> {
-    const res = await this.databaseService.db.executeRead((trx) =>
-      trx
-        .selectFrom('concepts')
-        .innerJoin('edges', 'edges.parent_id', 'concepts.id')
-        .selectAll('concepts')
-        .where('edges.child_id', '=', childId)
-        .execute(),
-    );
-    return res.map(this.mapToDomainConcept);
-  }
-
-  // ============================================
-  // OBSERVABILITY & STATS
-  // ============================================
-
-  async countEdges(): Promise<number> {
-    return this.databaseService.db.executeRead(async (trx) => {
-      const res = await trx
-        .selectFrom('edges')
-        .select(trx.fn.count('parent_id').as('count'))
-        .executeTakeFirst();
-      return Number(res?.count || 0);
-    });
-  }
-
-  async getMaxDepth(): Promise<number> {
-    return this.databaseService.db.executeRead(async (trx) => {
-      const res = await trx
-        .selectFrom('concepts')
-        .select(trx.fn.max('level').as('max_level'))
-        .executeTakeFirst();
-      return Number(res?.max_level || 0);
-    });
-  }
-
-  // ============================================
-  // GRAPH ALGORITHMS (Kysely Power)
+  // GRAPH ALGORITHMS (Recursive CTEs)
   // ============================================
 
   async getAncestors(conceptId: string): Promise<DomainConcept[]> {
@@ -278,7 +186,6 @@ export class ConceptRepository {
             .select([
               'parent_id',
               'child_id',
-              // Explicitly cast for MySQL to avoid truncation or type issues
               sql<string>`CAST(parent_id AS CHAR(1000))`.as('path_str'),
             ])
             .where('child_id', '=', conceptId)
@@ -302,26 +209,16 @@ export class ConceptRepository {
 
     if (pathResults.length === 0) return [];
 
-    // 2. Extract IDs safely
+    // 2. Extract IDs
     const allPathIds = new Set<string>();
     pathResults.forEach((row) => {
-      // Because we use CamelCasePlugin in Service, runtime keys MIGHT be camelCase
-      // But we are manually using types here.
-      // Safe access:
       const pathStr = (row as any).pathStr || (row as any).path_str;
-      if (pathStr) {
+      if (pathStr)
         pathStr.split(',').forEach((id: string) => allPathIds.add(id));
-      }
     });
     allPathIds.add(conceptId);
 
     // 3. Fetch Concepts
-    const concepts = await this.findMany({
-      take: 10000,
-      skip: 0,
-    });
-    // Optimization: Filter manually or rewrite findMany to accept IDs.
-    // Let's use raw read for specific IDs to avoid large scan:
     const conceptsMapRes = await this.databaseService.db.executeRead((trx) =>
       trx
         .selectFrom('concepts')
@@ -344,18 +241,12 @@ export class ConceptRepository {
       const pathObjects = ids
         .map((id: string) => conceptMap.get(id))
         .filter((c: DomainConcept | undefined): c is DomainConcept => !!c);
-
       return [...pathObjects, targetNode];
     });
   }
 
   // --- MAPPERS ---
-  // Handles the discrepancy between Snake Case DB (generated types) and Camel Case Plugin/Domain
-
   private mapToDomainConcept(row: Selectable<ConceptTable>): DomainConcept {
-    // If CamelCasePlugin is ON, row will actually have createdAt at runtime
-    // If OFF, it has created_at.
-    // We cast to 'any' to handle both safely.
     const r = row as any;
     return {
       id: r.id,
@@ -364,16 +255,6 @@ export class ConceptRepository {
       level: r.level,
       createdAt: r.createdAt || r.created_at,
       updatedAt: r.updatedAt || r.updated_at,
-    };
-  }
-
-  private mapToDomainVariant(row: Selectable<VariantTable>): DomainVariant {
-    const r = row as any;
-    return {
-      id: r.id,
-      conceptId: r.conceptId || r.concept_id,
-      name: r.name,
-      createdAt: r.createdAt || r.created_at,
     };
   }
 }

@@ -4,7 +4,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { CamelCasePlugin, Kysely, MysqlDialect } from 'kysely';
+import { Kysely, MysqlDialect } from 'kysely';
 import { createPool, Pool, PoolOptions } from 'mysql2';
 import { DbRouter } from './db-router';
 import type { DB } from './types';
@@ -73,7 +73,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     // 4. Initialize Master Kysely Instance
     this.writeDb = new Kysely<DB>({
       dialect: new MysqlDialect({ pool: this.masterPool }),
-      plugins: [new CamelCasePlugin()], // Ensure snake_case -> camelCase mapping
+      log: ['query', 'error'],
     });
 
     // 5. Initialize the DbRouter

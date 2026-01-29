@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Selectable, sql } from 'kysely';
 import { DatabaseService } from '../../db/database.service';
-
 import { DB } from '../../db/types';
 import { DomainConcept, DomainEdge } from './domain.types';
 
@@ -19,7 +18,6 @@ export class EdgeRepository {
 
   async create(parentId: string, childId: string): Promise<DomainEdge> {
     const createdAt = new Date();
-
     await this.databaseService.db
       .write()
       .insertInto('edges')
@@ -30,11 +28,7 @@ export class EdgeRepository {
       })
       .execute();
 
-    return {
-      parentId,
-      childId,
-      createdAt,
-    };
+    return { parentId, childId, createdAt };
   }
 
   async delete(parentId: string, childId: string): Promise<void> {
@@ -62,7 +56,6 @@ export class EdgeRepository {
         .where('child_id', '=', childId)
         .executeTakeFirst(),
     );
-
     return res ? this.mapToDomainEdge(res) : null;
   }
 
@@ -77,8 +70,6 @@ export class EdgeRepository {
         .where('parent_id', '=', parentId);
 
       if (includeChild) {
-        // Join Concept as Child
-        // We alias concept columns to avoid name collisions with edge columns
         query = query
           .innerJoin('concepts as c', 'edges.child_id', 'c.id')
           .select([
@@ -92,12 +83,10 @@ export class EdgeRepository {
       }
 
       const res = await query.execute();
-
       return res.map((row) => {
         const edge = this.mapToDomainEdge(row);
-        if (includeChild && (row as any).c_id) {
+        if (includeChild && (row as any).c_id)
           edge.child = this.mapJoinedConcept(row, 'c_');
-        }
         return edge;
       });
     });
@@ -114,7 +103,6 @@ export class EdgeRepository {
         .where('child_id', '=', childId);
 
       if (includeParent) {
-        // Join Concept as Parent
         query = query
           .innerJoin('concepts as p', 'edges.parent_id', 'p.id')
           .select([
@@ -128,20 +116,28 @@ export class EdgeRepository {
       }
 
       const res = await query.execute();
-
       return res.map((row) => {
         const edge = this.mapToDomainEdge(row);
-        if (includeParent && (row as any).p_id) {
+        if (includeParent && (row as any).p_id)
           edge.parent = this.mapJoinedConcept(row, 'p_');
-        }
         return edge;
       });
     });
   }
 
   // ============================================
-  // GRAPH RELATIONS (Getting Concepts directly)
+  // STATS & HELPERS
   // ============================================
+
+  async countEdges(): Promise<number> {
+    return this.databaseService.db.executeRead(async (trx) => {
+      const res = await trx
+        .selectFrom('edges')
+        .select(trx.fn.count('parent_id').as('count'))
+        .executeTakeFirst();
+      return Number(res?.count || 0);
+    });
+  }
 
   async getParents(conceptId: string): Promise<DomainConcept[]> {
     const res = await this.databaseService.db.executeRead((trx) =>
@@ -167,18 +163,11 @@ export class EdgeRepository {
     return res.map(this.mapToDomainConcept);
   }
 
-  // ============================================
-  // CYCLE DETECTION & REACHABILITY (Recursive)
-  // ============================================
-
   async detectCycle(parentId: string, childId: string): Promise<boolean> {
-    // Check if adding Parent -> Child creates a cycle.
-    // This implies checking if Child can already reach Parent.
     return this.canReach(childId, parentId);
   }
 
   async canReach(fromId: string, toId: string): Promise<boolean> {
-    // Use read replica for expensive recursive checks
     const result = await this.databaseService.db.executeRead((trx) =>
       trx
         .withRecursive('path_cte', (qb) =>
@@ -199,16 +188,11 @@ export class EdgeRepository {
         .limit(1)
         .execute(),
     );
-
     return result.length > 0;
   }
 
-  // ============================================
-  // MAPPERS
-  // ============================================
-
+  // --- MAPPERS ---
   private mapToDomainEdge(row: Selectable<EdgeTable> | any): DomainEdge {
-    // Handle both raw snake_case from DB or CamelCasePlugin result
     const r = row as any;
     return {
       parentId: r.parentId || r.parent_id,
@@ -231,7 +215,6 @@ export class EdgeRepository {
     };
   }
 
-  // Helper to map aliased columns (e.g., c_id, c_label) back to Concept
   private mapJoinedConcept(row: any, prefix: string): DomainConcept {
     return {
       id: row[`${prefix}id`],

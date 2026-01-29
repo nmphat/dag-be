@@ -1,4 +1,4 @@
-import { CamelCasePlugin, Kysely, MysqlDialect } from 'kysely';
+import { Kysely, MysqlDialect } from 'kysely';
 import type { Pool } from 'mysql2';
 import type { DB } from './types';
 
@@ -10,13 +10,11 @@ export class DbRouter {
     private readonly writeDb: Kysely<DB>, // Master instance (Write)
     readPools: Pool[], // Raw pools for Slaves (Read)
   ) {
-    // Initialize Kysely instances for all slave pools with CamelCasePlugin
     this.slaves = readPools.map(
       (pool) =>
         new Kysely<DB>({
           dialect: new MysqlDialect({ pool }),
-          plugins: [new CamelCasePlugin()], // Ensure snake_case -> camelCase mapping
-          // log: ['query', 'error'],
+          log: ['query', 'error'],
         }),
     );
   }
