@@ -18,7 +18,11 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
-import { CreateEdgeDto } from './dto';
+import {
+  CreateEdgeDto,
+  EdgeChildrenResponseDto,
+  EdgeParentsResponseDto,
+} from './dto';
 import { EdgesService } from './edges.service';
 
 @ApiTags('edges')
@@ -51,25 +55,47 @@ export class EdgesController {
 
   @Get('parents/:nodeId')
   @ApiOperation({ summary: 'Get direct parent nodes' })
-  @ApiOkResponse({ description: 'Parents retrieved successfully' })
-  async getParents(@Param('nodeId') nodeId: string) {
+  @ApiOkResponse({
+    description: 'Parents retrieved successfully',
+    type: EdgeParentsResponseDto,
+  })
+  async getParents(
+    @Param('nodeId') nodeId: string,
+  ): Promise<EdgeParentsResponseDto> {
     const parents = await this.edgesService.getParents(nodeId);
     return {
       nodeId,
       count: parents.length,
-      parents,
+      parents: parents.map((p) => this.mapToConceptResponse(p)),
     };
   }
 
   @Get('children/:nodeId')
   @ApiOperation({ summary: 'Get direct child nodes' })
-  @ApiOkResponse({ description: 'Children retrieved successfully' })
-  async getChildren(@Param('nodeId') nodeId: string) {
+  @ApiOkResponse({
+    description: 'Children retrieved successfully',
+    type: EdgeChildrenResponseDto,
+  })
+  async getChildren(
+    @Param('nodeId') nodeId: string,
+  ): Promise<EdgeChildrenResponseDto> {
     const children = await this.edgesService.getChildren(nodeId);
     return {
       nodeId,
       count: children.length,
-      children,
+      children: children.map((c) => this.mapToConceptResponse(c)),
+    };
+  }
+
+  private mapToConceptResponse(data: any) {
+    return {
+      id: data.id,
+      label: data.label,
+      definition: data.definition,
+      level: data.level,
+      variants: data.variants || [],
+      createdAt: data.createdAt || data.created_at,
+      updatedAt: data.updatedAt || data.updated_at,
     };
   }
 }

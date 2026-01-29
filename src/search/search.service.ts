@@ -76,11 +76,17 @@ export class SearchService implements OnModuleInit {
             definition: {
               type: 'text',
               analyzer: 'custom_analyzer',
+              fields: {
+                keyword: { type: 'keyword', ignore_above: 256 },
+              },
             },
             level: { type: 'integer' },
             variants: {
               type: 'text',
               analyzer: 'custom_analyzer',
+              fields: {
+                keyword: { type: 'keyword' },
+              },
             },
           },
         },
@@ -148,19 +154,73 @@ export class SearchService implements OnModuleInit {
   /**
    * Search for concepts with fuzzy matching and highlighting.
    */
-  async search(query: string, limit = 20, offset = 0): Promise<SearchResult> {
+  /**
+   * Search for concepts with fuzzy matching, highlighting, filtering, and sorting.
+   */
+  async search(
+    query: string,
+    limit = 20,
+    offset = 0,
+    options?: {
+      level?: number;
+      fields?: string[];
+      sort?: string[];
+    },
+  ): Promise<SearchResult> {
+    // 1. Build Query
+    const searchFields =
+      options?.fields && options.fields.length > 0
+        ? options.fields
+        : ['label^3', 'definition', 'variants^2'];
+
+    const must: any[] = [
+      {
+        multi_match: {
+          query,
+          fields: searchFields,
+          type: 'best_fields',
+          fuzziness: 'AUTO',
+        },
+      },
+    ];
+
+    const filter: any[] = [];
+    if (options?.level !== undefined) {
+      filter.push({ term: { level: options.level } });
+    }
+
+    // 2. Build Sort
+    const sort: any[] = [];
+    if (options?.sort && options.sort.length > 0) {
+      options.sort.forEach((s) => {
+        const [field, order] = s.split(':');
+        if (field) {
+          // Map text fields to their keyword sub-field for sorting
+          const sortField =
+            field === 'label' || field === 'definition' || field === 'variants'
+              ? `${field}.keyword`
+              : field;
+          sort.push({
+            [sortField]: { order: order === 'asc' ? 'asc' : 'desc' },
+          });
+        }
+      });
+    } else {
+      // Default sort by score (relevance)
+      sort.push({ _score: 'desc' });
+    }
+
     const response = await this.elasticsearchService.search({
       index: this.indexName,
       from: offset,
       size: limit,
       query: {
-        multi_match: {
-          query,
-          fields: ['label^3', 'definition', 'variants^2'],
-          type: 'best_fields',
-          fuzziness: 'AUTO',
+        bool: {
+          must,
+          filter,
         },
       },
+      sort,
       highlight: {
         fields: {
           label: {},

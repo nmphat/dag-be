@@ -42,7 +42,7 @@ You are given a taxonomy dataset (concept nodes + parent/child edges). Your job 
 - Search over label + variants:
   - Support prefix search at a minimum.
   - Do not assume labels are unique (results must be keyed by id and must not drop nodes).
-  - When multiple results share the same label, show disambiguation context  
+  - When multiple results share the same label,  show disambiguation context  
     (e.g., parent(s), level, and/or paths).
 - Concept detail view:
   - Definition (when present).

@@ -7,17 +7,25 @@ import {
   HttpCode,
   HttpStatus,
   Param,
-  ParseBoolPipe,
   ParseIntPipe,
   Post,
   Put,
   Query,
   ValidationPipe,
 } from '@nestjs/common';
-import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SearchService } from 'src/search/search.service';
 import { ConceptsService } from './concepts.service';
-import { CreateConceptDto, UpdateConceptDto } from './dto';
+import {
+  ConceptChildrenResponseDto,
+  ConceptResponseDto,
+  ConceptStatsResponseDto,
+  CreateConceptDto,
+  PathsToRootResponseDto,
+  SearchConceptRequestDto,
+  SearchConceptResponseDto,
+  UpdateConceptDto,
+} from './dto';
 
 @ApiTags('concepts')
 @Controller('api/concepts')
@@ -31,39 +39,37 @@ export class ConceptsController {
   @ApiOperation({
     summary: 'Get taxonomy statistics (Total nodes, depth, edges)',
   })
-  async getStats() {
-    return this.conceptsService.getStats();
+  @ApiResponse({ type: ConceptStatsResponseDto })
+  async getStats(): Promise<ConceptStatsResponseDto> {
+    const stats = await this.conceptsService.getStats();
+    return {
+      totalNodes: stats.totalNodes,
+      totalEdges: stats.totalEdges,
+      maxDepth: typeof stats.maxDepth === 'number' ? stats.maxDepth : 0,
+      memoryFootprint: stats.memoryFootprint,
+    };
   }
 
   @Get('search/fulltext')
   @ApiOperation({ summary: 'Full-text search with highlighting' })
-  @ApiQuery({
-    name: 'q',
-    required: true,
-    description: 'Prefix search supported',
-  })
-  @ApiQuery({
-    name: 'groupByLabel',
-    required: false,
-    type: Boolean,
-    description: 'Bonus Goal: Group identical labels',
-  })
+  @ApiResponse({ type: SearchConceptResponseDto })
   async search(
-    @Query('q') query: string,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
-    @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
-    @Query('groupByLabel', new DefaultValuePipe(false), ParseBoolPipe)
-    groupByLabel: boolean,
-  ) {
-    // If groupByLabel is true, Service logic will handle grouping by label
-    // and return distinct IDs within that group for "Disambiguation context"
-    return this.searchService.search(query, limit, offset);
+    @Query(new ValidationPipe({ transform: true }))
+    dto: SearchConceptRequestDto,
+  ): Promise<SearchConceptResponseDto> {
+    return this.searchService.search(dto.q, dto.limit, dto.offset, {
+      level: dto.level,
+      fields: dto.fields,
+      sort: dto.sort,
+    });
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get concept details + Definition' })
-  async findOne(@Param('id') id: string) {
-    return this.conceptsService.findOne(id);
+  @ApiResponse({ type: ConceptResponseDto })
+  async findOne(@Param('id') id: string): Promise<ConceptResponseDto> {
+    const concept = await this.conceptsService.findOne(id);
+    return this.mapToResponse(concept);
   }
 
   @Get(':id/children')
@@ -72,17 +78,17 @@ export class ConceptsController {
     description:
       'Paginated list of children. Critical for nodes with thousands of sub-concepts.',
   })
+  @ApiResponse({ type: ConceptChildrenResponseDto })
   async getChildren(
     @Param('id') id: string,
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
     @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
-  ) {
-    // Replaces generic "getDescendants" for UI tree navigation
-    const children = await this.conceptsService.getChildren(id, limit, offset);
+  ): Promise<ConceptChildrenResponseDto> {
+    const result = await this.conceptsService.getChildren(id, limit, offset);
     return {
       parentId: id,
       pagination: { limit, offset },
-      data: children,
+      data: result.nodes.map((n) => this.mapToResponse(n)),
     };
   }
 
@@ -92,26 +98,35 @@ export class ConceptsController {
     description:
       'Req: A "paths to root" viewer for multi-parent nodes (DAG support)',
   })
-  async getPathsToRoot(@Param('id') id: string) {
-    // Returns array of arrays: [['Science', 'Biology', 'Cell'], ['Chemistry', 'Cell']]
-    return this.conceptsService.getPathsToRoot(id);
+  @ApiResponse({ type: PathsToRootResponseDto })
+  async getPathsToRoot(
+    @Param('id') id: string,
+  ): Promise<PathsToRootResponseDto> {
+    const paths = await this.conceptsService.getPathsToRoot(id);
+    return {
+      paths: paths.map((path) => path.map((n) => this.mapToResponse(n))),
+    };
   }
 
   @Post()
   @ApiOperation({ summary: 'Create a new concept' })
+  @ApiResponse({ type: ConceptResponseDto })
   async create(
     @Body(new ValidationPipe({ whitelist: true })) dto: CreateConceptDto,
-  ) {
-    return this.conceptsService.create(dto);
+  ): Promise<ConceptResponseDto> {
+    const concept = await this.conceptsService.create(dto);
+    return this.mapToResponse(concept);
   }
 
   @Put(':id')
   @ApiOperation({ summary: 'Update a concept' })
+  @ApiResponse({ type: ConceptResponseDto })
   async update(
     @Param('id') id: string,
     @Body(new ValidationPipe({ whitelist: true })) dto: UpdateConceptDto,
-  ) {
-    return this.conceptsService.update(id, dto);
+  ): Promise<ConceptResponseDto> {
+    const concept = await this.conceptsService.update(id, dto);
+    return this.mapToResponse(concept);
   }
 
   @Delete(':id')
@@ -119,5 +134,17 @@ export class ConceptsController {
   @ApiOperation({ summary: 'Delete a concept' })
   async remove(@Param('id') id: string) {
     await this.conceptsService.remove(id);
+  }
+
+  private mapToResponse(data: any): ConceptResponseDto {
+    return {
+      id: data.id,
+      label: data.label,
+      definition: data.definition,
+      level: data.level,
+      variants: data.variants || [],
+      createdAt: data.createdAt || data.created_at,
+      updatedAt: data.updatedAt || data.updated_at,
+    };
   }
 }
