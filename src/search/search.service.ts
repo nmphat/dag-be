@@ -221,6 +221,7 @@ export class SearchService implements OnModuleInit {
         },
       },
       sort,
+      track_scores: true,
       highlight: {
         fields: {
           label: {},

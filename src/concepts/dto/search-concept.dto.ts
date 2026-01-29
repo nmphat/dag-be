@@ -1,6 +1,61 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsArray, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsArray,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+  registerDecorator,
+  ValidationArguments,
+  ValidationOptions,
+} from 'class-validator';
+
+export enum SearchField {
+  LABEL = 'label',
+  DEF = 'definition',
+  VARIANTS = 'variants',
+}
+
+export enum SortOrder {
+  ASC = 'asc',
+  DESC = 'desc',
+}
+
+// Template Literal Type for auto-building sort string
+export type SortParam = `${SearchField | 'level' | '_score'}:${SortOrder}`;
+
+// Custom Validator for SortParam
+export function IsSortParam(validationOptions?: ValidationOptions) {
+  return function (object: Object, propertyName: string) {
+    registerDecorator({
+      name: 'isSortParam',
+      target: object.constructor,
+      propertyName: propertyName,
+      options: validationOptions,
+      validator: {
+        validate(value: any, args: ValidationArguments) {
+          if (typeof value !== 'string') return false;
+          const [field, order] = value.split(':');
+          const validFields = [
+            ...Object.values(SearchField),
+            'level',
+            '_score',
+          ];
+          const validOrders = Object.values(SortOrder);
+          return (
+            validFields.includes(field as any) &&
+            validOrders.includes(order as any)
+          );
+        },
+        defaultMessage(args: ValidationArguments) {
+          return `${args.property} must be in format "field:order" (e.g. level:desc). Supported fields: label, definition, variants, level, _score.`;
+        },
+      },
+    });
+  };
+}
 
 export class SearchConceptRequestDto {
   @ApiProperty({
@@ -23,37 +78,38 @@ export class SearchConceptRequestDto {
 
   @ApiPropertyOptional({
     description:
-      'Fields to include in the search. Defaults to label,variants,definition. Supports comma-separated values in query string.',
-    example: ['label', 'variants', 'definition'],
-    type: [String],
+      'Fields to include in the search. Defaults to label,variants,definition.',
+    enum: SearchField,
+    isArray: true,
+    example: [SearchField.LABEL, SearchField.VARIANTS],
   })
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
+  @IsEnum(SearchField, { each: true })
   @Transform(({ value }) => {
     if (typeof value === 'string') {
       return value.split(',');
     }
     return value;
   })
-  fields?: string[];
+  fields?: SearchField[];
 
   @ApiPropertyOptional({
     description:
-      'Sort params in format "field:order". E.g. ["level:desc", "createdAt:asc"]',
+      'Sort params in format "field:order". Supported fields: label, definition, variants, level, _score. Order: asc, desc. \nPattern: ^(label|definition|variants|level|_score):(asc|desc)$',
     example: ['level:desc'],
     type: [String],
   })
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
+  @IsSortParam({ each: true })
   @Transform(({ value }) => {
     if (typeof value === 'string') {
       return value.split(',');
     }
     return value;
   })
-  sort?: string[];
+  sort?: SortParam[];
 
   @ApiPropertyOptional({
     description: 'Maximum number of concepts to return',
