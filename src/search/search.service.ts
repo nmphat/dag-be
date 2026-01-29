@@ -158,7 +158,7 @@ export class SearchService implements OnModuleInit {
    * Search for concepts with fuzzy matching, highlighting, filtering, and sorting.
    */
   async search(
-    query: string,
+    query?: string,
     limit = 20,
     offset = 0,
     options?: {
@@ -173,16 +173,19 @@ export class SearchService implements OnModuleInit {
         ? options.fields
         : ['label^3', 'definition', 'variants^2'];
 
-    const must: any[] = [
-      {
+    const must: any[] = [];
+    if (query) {
+      must.push({
         multi_match: {
           query,
           fields: searchFields,
           type: 'best_fields',
           fuzziness: 'AUTO',
         },
-      },
-    ];
+      });
+    } else {
+      must.push({ match_all: {} });
+    }
 
     const filter: any[] = [];
     if (options?.level !== undefined) {
@@ -222,15 +225,17 @@ export class SearchService implements OnModuleInit {
       },
       sort,
       track_scores: true,
-      highlight: {
-        fields: {
-          label: {},
-          definition: {},
-          variants: {},
+      ...(query && {
+        highlight: {
+          fields: {
+            label: {},
+            definition: {},
+            variants: {},
+          },
+          pre_tags: ['<mark>'],
+          post_tags: ['</mark>'],
         },
-        pre_tags: ['<mark>'],
-        post_tags: ['</mark>'],
-      },
+      }),
     });
 
     const hits = response.hits.hits;

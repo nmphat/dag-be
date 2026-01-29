@@ -58,12 +58,13 @@ export function IsSortParam(validationOptions?: ValidationOptions) {
 }
 
 export class SearchConceptRequestDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Search term to filter concepts by label or definition',
     example: 'concept',
   })
+  @IsOptional()
   @IsString()
-  q: string;
+  q?: string;
 
   @ApiPropertyOptional({
     description: 'Filter concepts by hierarchy level',
