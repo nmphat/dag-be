@@ -15,6 +15,9 @@ async function bootstrap() {
     }),
   );
 
+  // Enable CORS for all origins
+  app.enableCors();
+
   // Setup Swagger
   const config = new DocumentBuilder()
     .setTitle('DAG API')
