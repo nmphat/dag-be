@@ -6,14 +6,17 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  MessageEvent,
   Param,
   ParseIntPipe,
   Post,
   Put,
   Query,
+  Sse,
   ValidationPipe,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { map, Observable } from 'rxjs';
 import { SearchService } from 'src/search/search.service';
 import { ConceptsService } from './concepts.service';
 import {
@@ -26,6 +29,7 @@ import {
   SearchConceptResponseDto,
   UpdateConceptDto,
 } from './dto';
+import { TaxonomyPathStreamService } from './services/taxonomy-path-stream.service';
 
 @ApiTags('concepts')
 @Controller('api/concepts')
@@ -33,6 +37,7 @@ export class ConceptsController {
   constructor(
     private readonly conceptsService: ConceptsService,
     private readonly searchService: SearchService,
+    private readonly pathStreamService: TaxonomyPathStreamService,
   ) {}
 
   @Get('admin/stats')
@@ -90,6 +95,37 @@ export class ConceptsController {
       pagination: { limit, offset },
       data: result.nodes.map((n) => this.mapToResponse(n)),
     };
+  }
+
+  @Sse(':id/paths/stream')
+  @ApiOperation({
+    summary: 'Stream all paths to root (SSE)',
+    description:
+      'Real-time streaming of paths using SSE. Optimized for large DAGs.',
+  })
+  @ApiQuery({ name: 'maxDepth', required: false, type: Number })
+  @ApiQuery({ name: 'maxPaths', required: false, type: Number })
+  streamPaths(
+    @Param('id') id: string,
+    @Query('maxDepth', new ParseIntPipe({ optional: true }))
+    maxDepth?: number,
+    @Query('maxPaths', new ParseIntPipe({ optional: true }))
+    maxPaths?: number,
+  ): Observable<MessageEvent> {
+    return this.pathStreamService
+      .streamPathsToRoot(id, {
+        maxDepth,
+        maxPaths,
+      })
+      .pipe(
+        map(
+          (chunk) =>
+            ({
+              type: chunk.type,
+              data: chunk,
+            }) as MessageEvent,
+        ),
+      );
   }
 
   @Get(':id/paths')

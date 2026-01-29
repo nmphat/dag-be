@@ -6,6 +6,7 @@ import { ConceptsModule } from './concepts/concepts.module';
 import { DatabaseModule } from './database/database.module';
 import { EdgesModule } from './edges/edges.module';
 import { HealthController } from './health.controller';
+import { RedisModule } from './redis/redis.module';
 import { SearchModule } from './search/search.module';
 
 @Module({
@@ -15,6 +16,7 @@ import { SearchModule } from './search/search.module';
       envFilePath: '.env',
     }),
     DatabaseModule,
+    RedisModule,
     SearchModule,
     EdgesModule,
     ConceptsModule,
