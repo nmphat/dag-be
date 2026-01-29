@@ -55,18 +55,26 @@ export class ConceptsController {
     };
   }
 
+  // concept.controller.ts
+
   @Get('search/fulltext')
-  @ApiOperation({ summary: 'Full-text search with highlighting' })
+  @ApiOperation({ summary: 'Full-text search with cursor-based pagination' })
   @ApiResponse({ type: SearchConceptResponseDto })
   async search(
     @Query(new ValidationPipe({ transform: true }))
     dto: SearchConceptRequestDto,
   ): Promise<SearchConceptResponseDto> {
-    return this.searchService.search(dto.q, dto.limit, dto.offset, {
-      level: dto.level,
-      fields: dto.fields,
-      sort: dto.sort,
-    });
+    return this.searchService.search(
+      dto.q,
+      dto.pageSize,
+      dto.cursor,
+      dto.direction,
+      {
+        level: dto.level,
+        fields: dto.fields,
+        sort: dto.sort,
+      },
+    );
   }
 
   @Get(':id')

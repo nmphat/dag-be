@@ -14,7 +14,7 @@ export class DbRouter {
       (pool) =>
         new Kysely<DB>({
           dialect: new MysqlDialect({ pool }),
-          log: ['query', 'error'],
+          // log: ['query', 'error'],
         }),
     );
   }

@@ -57,10 +57,14 @@ export function IsSortParam(validationOptions?: ValidationOptions) {
   };
 }
 
+// dto/search-concept.dto.ts
+
+import { IsIn, Max } from 'class-validator';
+
 export class SearchConceptRequestDto {
   @ApiPropertyOptional({
     description: 'Search term to filter concepts by label or definition',
-    example: 'concept',
+    example: undefined,
   })
   @IsOptional()
   @IsString()
@@ -68,7 +72,7 @@ export class SearchConceptRequestDto {
 
   @ApiPropertyOptional({
     description: 'Filter concepts by hierarchy level',
-    example: 0,
+    example: undefined,
     minimum: 0,
   })
   @IsOptional()
@@ -98,7 +102,7 @@ export class SearchConceptRequestDto {
   @ApiPropertyOptional({
     description:
       'Sort params in format "field:order". Supported fields: label, definition, variants, level, _score. Order: asc, desc. \nPattern: ^(label|definition|variants|level|_score):(asc|desc)$',
-    example: ['level:desc'],
+    example: ['_score:desc'],
     type: [String],
   })
   @IsOptional()
@@ -113,37 +117,69 @@ export class SearchConceptRequestDto {
   sort?: SortParam[];
 
   @ApiPropertyOptional({
-    description: 'Maximum number of concepts to return',
-    example: 50,
+    description: 'Number of concepts to return per page',
+    example: 20,
     minimum: 1,
+    maximum: 100,
     default: 20,
   })
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(100)
   @Type(() => Number)
-  limit?: number = 20;
+  pageSize?: number = 20;
 
   @ApiPropertyOptional({
-    description: 'Number of concepts to skip for pagination',
-    example: 0,
-    minimum: 0,
-    default: 0,
+    description:
+      'Pagination cursor from previous response (nextCursor or prevCursor)',
+    example: undefined,
   })
   @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Type(() => Number)
-  offset?: number = 0;
+  @IsString()
+  cursor?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Pagination direction: "next" for forward, "prev" for backward',
+    enum: ['next', 'prev'],
+    default: 'next',
+  })
+  @IsOptional()
+  @IsIn(['next', 'prev'])
+  direction?: 'next' | 'prev' = 'next';
 }
 
 export class SearchConceptResponseDto {
   @ApiProperty({ description: 'List of matching concepts' })
-  concepts: any[]; // We can refine this type or import DomainConcept/ConceptDocument if we move types to shared location
+  concepts: any[];
 
   @ApiProperty({ description: 'Total number of matches found' })
   total: number;
 
   @ApiProperty({ description: 'Time took to execute search in ms' })
   took: number;
+
+  @ApiProperty({ description: 'Number of concepts per page' })
+  pageSize: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Cursor for next page. Pass this as "cursor" with direction="next"',
+  })
+  nextCursor?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Cursor for previous page. Pass this as "cursor" with direction="prev"',
+  })
+  prevCursor?: string;
+
+  @ApiProperty({
+    description: 'Whether there are more results after this page',
+  })
+  hasNext: boolean;
+
+  @ApiProperty({ description: 'Whether there are results before this page' })
+  hasPrev: boolean;
 }

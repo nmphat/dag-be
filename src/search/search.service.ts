@@ -1,5 +1,12 @@
+// search.service.ts
+
 import { SearchTotalHits } from '@elastic/elasticsearch/lib/api/types';
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ElasticsearchService } from '@nestjs/elasticsearch';
 
 export interface ConceptDocument {
@@ -8,7 +15,6 @@ export interface ConceptDocument {
   definition?: string;
   level: number;
   variants?: string[];
-  // Metadata for search results
   _score?: number;
   _highlight?: Record<string, string[]>;
 }
@@ -17,12 +23,26 @@ export interface SearchResult {
   concepts: ConceptDocument[];
   total: number;
   took: number;
+  pageSize: number;
+  // Cursor-based pagination
+  nextCursor?: string;
+  prevCursor?: string;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
+
+export interface SearchOptions {
+  level?: number;
+  fields?: string[];
+  sort?: string[];
 }
 
 @Injectable()
 export class SearchService implements OnModuleInit {
   private readonly logger = new Logger(SearchService.name);
-  private readonly indexName = process.env.ES_INDEX_NAME || 'concepts'; // Renamed to 'concepts'
+  private readonly indexName = process.env.ES_INDEX_NAME || 'concepts';
+  private readonly MAX_PAGE_SIZE = 100;
+  private readonly DEFAULT_FIELDS = ['label^3', 'definition', 'variants^2'];
 
   constructor(private readonly elasticsearchService: ElasticsearchService) {}
 
@@ -69,24 +89,18 @@ export class SearchService implements OnModuleInit {
             label: {
               type: 'text',
               analyzer: 'custom_analyzer',
-              fields: {
-                keyword: { type: 'keyword' },
-              },
+              fields: { keyword: { type: 'keyword' } },
             },
             definition: {
               type: 'text',
               analyzer: 'custom_analyzer',
-              fields: {
-                keyword: { type: 'keyword', ignore_above: 256 },
-              },
+              fields: { keyword: { type: 'keyword', ignore_above: 256 } },
             },
             level: { type: 'integer' },
             variants: {
               type: 'text',
               analyzer: 'custom_analyzer',
-              fields: {
-                keyword: { type: 'keyword' },
-              },
+              fields: { keyword: { type: 'keyword' } },
             },
           },
         },
@@ -122,7 +136,7 @@ export class SearchService implements OnModuleInit {
 
     const result = await this.elasticsearchService.bulk({
       operations,
-      refresh: false, // Performance optimization: let ES manage refresh intervals
+      refresh: false,
     });
 
     if (result.errors) {
@@ -152,26 +166,108 @@ export class SearchService implements OnModuleInit {
   }
 
   /**
-   * Search for concepts with fuzzy matching and highlighting.
-   */
-  /**
-   * Search for concepts with fuzzy matching, highlighting, filtering, and sorting.
+   * Search with cursor-based pagination (next/prev navigation).
+   * Supports unlimited deep pagination using search_after.
    */
   async search(
     query?: string,
-    limit = 20,
-    offset = 0,
-    options?: {
-      level?: number;
-      fields?: string[];
-      sort?: string[];
-    },
+    pageSize = 20,
+    cursor?: string,
+    direction: 'next' | 'prev' = 'next',
+    options?: SearchOptions,
   ): Promise<SearchResult> {
-    // 1. Build Query
+    // Validate page size
+    pageSize = Math.min(Math.max(1, pageSize), this.MAX_PAGE_SIZE);
+
+    // Build query
+    const esQuery = this.buildQuery(query, options);
+    const sort = this.buildSort(options?.sort, !!query);
+
+    // Decode cursor if provided
+    const searchAfter = cursor ? this.decodeCursor(cursor) : undefined;
+
+    // For prev direction: reverse sort order
+    const effectiveSort = direction === 'prev' ? this.reverseSort(sort) : sort;
+
+    // Fetch one extra to determine hasMore
+    const response = await this.elasticsearchService.search({
+      index: this.indexName,
+      size: pageSize + 1,
+      query: esQuery,
+      sort: effectiveSort,
+      ...(searchAfter && { search_after: searchAfter }),
+      track_total_hits: true,
+      track_scores: true,
+      ...(query && {
+        highlight: {
+          fields: {
+            label: {},
+            definition: {},
+            variants: {},
+          },
+          pre_tags: ['<mark>'],
+          post_tags: ['</mark>'],
+        },
+      }),
+    });
+
+    let hits = response.hits.hits;
+    const totalHits = response.hits.total as SearchTotalHits;
+    const total = typeof totalHits === 'number' ? totalHits : totalHits.value;
+
+    // Check if there are more results
+    const hasMore = hits.length > pageSize;
+    if (hasMore) {
+      hits = hits.slice(0, pageSize);
+    }
+
+    // For prev direction: reverse results back to correct order
+    if (direction === 'prev') {
+      hits = hits.reverse();
+    }
+
+    // Build cursors from first and last hits
+    const firstHit = hits[0];
+    const lastHit = hits[hits.length - 1];
+
+    // Next cursor: from last hit (for forward pagination)
+    const nextCursor = lastHit?.sort
+      ? this.encodeCursor(lastHit.sort)
+      : undefined;
+
+    // Prev cursor: from first hit (for backward pagination)
+    const prevCursor = firstHit?.sort
+      ? this.encodeCursor(firstHit.sort)
+      : undefined;
+
+    return {
+      concepts: hits.map((hit) => {
+        const source = hit._source as ConceptDocument;
+        return {
+          ...source,
+          _score: hit._score || 0,
+          _highlight: hit.highlight as Record<string, string[]>,
+        };
+      }),
+      total,
+      took: response.took || 0,
+      pageSize,
+      nextCursor: hasMore || direction === 'prev' ? nextCursor : undefined,
+      prevCursor: cursor ? prevCursor : undefined, // No prev on first page
+      hasNext: direction === 'next' ? hasMore : true,
+      hasPrev: !!cursor,
+    };
+  }
+
+  // ============================================
+  // QUERY BUILDERS
+  // ============================================
+
+  private buildQuery(query?: string, options?: SearchOptions): any {
     const searchFields =
       options?.fields && options.fields.length > 0
         ? options.fields
-        : ['label^3', 'definition', 'variants^2'];
+        : this.DEFAULT_FIELDS;
 
     const must: any[] = [];
     if (query) {
@@ -192,13 +288,16 @@ export class SearchService implements OnModuleInit {
       filter.push({ term: { level: options.level } });
     }
 
-    // 2. Build Sort
+    return { bool: { must, filter } };
+  }
+
+  private buildSort(sortOptions?: string[], hasQuery?: boolean): any[] {
     const sort: any[] = [];
-    if (options?.sort && options.sort.length > 0) {
-      options.sort.forEach((s) => {
+
+    if (sortOptions && sortOptions.length > 0) {
+      sortOptions.forEach((s) => {
         const [field, order] = s.split(':');
         if (field) {
-          // Map text fields to their keyword sub-field for sorting
           const sortField =
             field === 'label' || field === 'definition' || field === 'variants'
               ? `${field}.keyword`
@@ -208,52 +307,52 @@ export class SearchService implements OnModuleInit {
           });
         }
       });
-    } else {
-      // Default sort by score (relevance)
+    } else if (hasQuery) {
+      // Default: sort by relevance score
       sort.push({ _score: 'desc' });
+    } else {
+      // No query: sort by label
+      sort.push({ 'label.keyword': 'asc' });
     }
 
-    const response = await this.elasticsearchService.search({
-      index: this.indexName,
-      from: offset,
-      size: limit,
-      query: {
-        bool: {
-          must,
-          filter,
+    // Always add unique tiebreaker (required for search_after)
+    sort.push({ id: 'asc' });
+
+    return sort;
+  }
+
+  private reverseSort(sort: any[]): any[] {
+    return sort.map((s) => {
+      const key = Object.keys(s)[0];
+      const value = s[key];
+
+      if (typeof value === 'string') {
+        return { [key]: value === 'asc' ? 'desc' : 'asc' };
+      }
+
+      return {
+        [key]: {
+          ...value,
+          order: value.order === 'asc' ? 'desc' : 'asc',
         },
-      },
-      track_total_hits: true,
-      sort,
-      track_scores: true,
-      ...(query && {
-        highlight: {
-          fields: {
-            label: {},
-            definition: {},
-            variants: {},
-          },
-          pre_tags: ['<mark>'],
-          post_tags: ['</mark>'],
-        },
-      }),
+      };
     });
+  }
 
-    const hits = response.hits.hits;
-    const total = response.hits.total as SearchTotalHits;
+  // ============================================
+  // CURSOR ENCODING/DECODING
+  // ============================================
 
-    return {
-      concepts: hits.map((hit) => {
-        const source = hit._source as ConceptDocument;
-        return {
-          ...source,
-          _score: hit._score || 0,
-          _highlight: hit.highlight,
-        };
-      }),
-      total: typeof total === 'number' ? total : total.value,
-      took: response.took || 0,
-    };
+  private encodeCursor(sortValues: any[]): string {
+    return Buffer.from(JSON.stringify(sortValues)).toString('base64url');
+  }
+
+  private decodeCursor(cursor: string): any[] {
+    try {
+      return JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+    } catch {
+      throw new BadRequestException('Invalid pagination cursor');
+    }
   }
 
   async clearIndex(): Promise<void> {

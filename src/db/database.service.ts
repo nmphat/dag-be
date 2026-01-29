@@ -73,7 +73,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     // 4. Initialize Master Kysely Instance
     this.writeDb = new Kysely<DB>({
       dialect: new MysqlDialect({ pool: this.masterPool }),
-      log: ['query', 'error'],
+      // log: ['query', 'error'],
     });
 
     // 5. Initialize the DbRouter
