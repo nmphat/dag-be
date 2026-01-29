@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Insertable, Selectable, Updateable } from 'kysely';
-import { DatabaseService } from '../../db/database.service';
-import { DB } from '../../db/types';
+import { DatabaseService } from 'src/db/database.service';
+import { DB } from 'src/db/types';
 import { DomainVariant } from './domain.types';
 
 // -- Database Types --

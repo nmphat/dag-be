@@ -15,7 +15,7 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { SearchService } from '../search/search.service';
+import { SearchService } from 'src/search/search.service';
 import { ConceptsService } from './concepts.service';
 import { CreateConceptDto, UpdateConceptDto } from './dto';
 
