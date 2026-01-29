@@ -223,6 +223,7 @@ export class SearchService implements OnModuleInit {
           filter,
         },
       },
+      track_total_hits: true,
       sort,
       track_scores: true,
       ...(query && {
