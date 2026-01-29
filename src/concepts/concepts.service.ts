@@ -1,13 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { Concept } from '@prisma/client';
-import { ConceptRepository } from '../database/repositories';
-import { SearchService } from '../search/search.service';
+import { ConceptRepository, EdgeRepository } from 'src/database/repositories';
+import { DomainConcept } from 'src/database/repositories/domain.types';
+import { VariantRepository } from 'src/database/repositories/variants.repository';
+import { SearchService } from 'src/search/search.service';
 import { CreateConceptDto, QueryConceptsDto, UpdateConceptDto } from './dto';
 
 @Injectable()
 export class ConceptsService {
   constructor(
     private readonly conceptRepo: ConceptRepository,
+    private readonly variantRepo: VariantRepository,
+    private readonly edgeRepo: EdgeRepository,
     private readonly searchService: SearchService,
   ) {}
 
@@ -16,8 +19,6 @@ export class ConceptsService {
   // ==========================================
 
   async generateHugeDataset(count: number) {
-    // We intentionally do NOT implement this inside the API Service to avoid timeout/memory leaks.
-    // The Controller calls this, but we return instructions.
     return {
       status: 'Skipped',
       message: 'Please run the dedicated seed script for performance.',
@@ -27,18 +28,17 @@ export class ConceptsService {
   }
 
   async getStats() {
-    // Simple observability metrics
     const [totalNodes, totalEdges, maxDepth] = await Promise.all([
       this.conceptRepo.count({}),
-      this.conceptRepo.countEdges(), // Assumes repo has this
-      this.conceptRepo.getMaxDepth(), // Assumes repo has this or return estimate
+      this.edgeRepo.countEdges(), // Used from EdgeRepository
+      this.conceptRepo.getMaxDepth(),
     ]);
 
     return {
       totalNodes,
       totalEdges,
-      maxDepth: maxDepth || 'Unknown', // Expensive to calc exactly on huge datasets
-      memoryFootprint: 'Check container stats', // Placeholder
+      maxDepth: maxDepth || 'Unknown',
+      memoryFootprint: 'Check container stats',
     };
   }
 
@@ -46,10 +46,6 @@ export class ConceptsService {
   // 2. EXPLORATION & NAVIGATION (Graph/DAG)
   // ==========================================
 
-  /**
-   * Drill-down navigation: Get immediate children with pagination.
-   * Optimized for large lists (10k children).
-   */
   async getChildren(parentId: string, limit: number, offset: number) {
     const [children, total] = await Promise.all([
       this.conceptRepo.findChildren(parentId, limit, offset),
@@ -62,17 +58,22 @@ export class ConceptsService {
     };
   }
 
-  /**
-   * DAG Support: Returns ALL paths from current node to root.
-   * Example: [['Biology', 'Science'], ['Life Science', 'Science']]
-   */
-  async getPathsToRoot(id: string): Promise<Concept[][]> {
-    // Ensure node exists
+  async getPathsToRoot(id: string): Promise<DomainConcept[][]> {
     const exists = await this.conceptRepo.findById(id);
     if (!exists) throw new NotFoundException(`Concept ${id} not found`);
-
-    // Delegate recursive query to Repository (using Kysely CTE)
     return this.conceptRepo.getPathsToRoot(id);
+  }
+
+  async getDescendants(id: string): Promise<DomainConcept[]> {
+    const exists = await this.conceptRepo.findById(id);
+    if (!exists) throw new NotFoundException(`Concept ${id} not found`);
+    return this.conceptRepo.getDescendants(id);
+  }
+
+  async getAncestors(id: string): Promise<DomainConcept[]> {
+    const exists = await this.conceptRepo.findById(id);
+    if (!exists) throw new NotFoundException(`Concept ${id} not found`);
+    return this.conceptRepo.getAncestors(id);
   }
 
   // ==========================================
@@ -81,23 +82,31 @@ export class ConceptsService {
 
   async create(
     dto: CreateConceptDto,
-  ): Promise<Concept & { variants: string[] }> {
+  ): Promise<DomainConcept & { variants: string[] }> {
+    // 1. Create Concept
     const concept = await this.conceptRepo.create({
       id: dto.id,
       label: dto.label,
       definition: dto.definition,
       level: dto.level ?? 0,
+      created_at: new Date(),
+      updated_at: new Date(),
     });
 
+    // 2. Create Variants (Using VariantRepository)
     if (dto.variants?.length) {
       await Promise.all(
         dto.variants.map((name) =>
-          this.conceptRepo.createVariant(concept.id, name),
+          this.variantRepo.create({
+            concept_id: concept.id,
+            name,
+            created_at: new Date(),
+          }),
         ),
       );
     }
 
-    // Sync to Elastic
+    // 3. Sync to Elastic
     const variants = dto.variants ?? [];
     await this.searchService.indexConcept({
       id: concept.id,
@@ -112,15 +121,15 @@ export class ConceptsService {
 
   async findOne(
     id: string,
-  ): Promise<Concept & { variants: string[]; parents: Concept[] }> {
+  ): Promise<DomainConcept & { variants: string[]; parents: DomainConcept[] }> {
     const concept = await this.conceptRepo.findById(id);
     if (!concept) {
       throw new NotFoundException(`Concept with id ${id} not found`);
     }
 
     const [variants, parents] = await Promise.all([
-      this.conceptRepo.findVariantsByConceptId(id),
-      this.conceptRepo.findParents(id), // Fetch immediate parents for DAG context
+      this.variantRepo.findByConceptId(id), // From VariantRepo
+      this.edgeRepo.getParents(id), // From EdgeRepo
     ]);
 
     return {
@@ -133,27 +142,33 @@ export class ConceptsService {
   async update(
     id: string,
     dto: UpdateConceptDto,
-  ): Promise<Concept & { variants: string[] }> {
-    // Check existence first
+  ): Promise<DomainConcept & { variants: string[] }> {
     const existing = await this.conceptRepo.findById(id);
     if (!existing) throw new NotFoundException(`Concept ${id} not found`);
 
     const { variants, ...conceptData } = dto;
 
-    // Transaction-like update (could be wrapped in $transaction if critical)
+    // Update Concept
     const concept = await this.conceptRepo.update(id, conceptData);
 
+    // Update Variants
     if (variants) {
-      await this.conceptRepo.deleteVariantsByConceptId(id);
+      await this.variantRepo.deleteByConceptId(id); // Clean old variants
       await Promise.all(
-        variants.map((name) => this.conceptRepo.createVariant(id, name)),
+        variants.map((name) =>
+          this.variantRepo.create({
+            concept_id: id,
+            name,
+            created_at: new Date(),
+          }),
+        ),
       );
     }
 
-    // Re-fetch updated variants
+    // Fetch updated variants for response & indexing
     const updatedVariants = variants
       ? variants
-      : (await this.conceptRepo.findVariantsByConceptId(id)).map((v) => v.name);
+      : (await this.variantRepo.findByConceptId(id)).map((v) => v.name);
 
     // Sync to Elastic
     await this.searchService.indexConcept({
@@ -171,24 +186,22 @@ export class ConceptsService {
     const existing = await this.conceptRepo.findById(id);
     if (!existing) throw new NotFoundException(`Concept ${id} not found`);
 
+    // Cascade delete is handled by DB FKs usually, but we call delete on root
     await this.conceptRepo.delete(id);
     await this.searchService.deleteConcept(id);
   }
 
   async query(
     dto: QueryConceptsDto,
-  ): Promise<{ nodes: Concept[]; total: number }> {
+  ): Promise<{ nodes: DomainConcept[]; total: number }> {
     const where: any = {};
+
     if (dto.level !== undefined) {
       where.level = dto.level;
     }
-    // Only apply basic DB search if ES is not used for this query
-    // (Ideally, 'search' should route to Elastic, but this is DB fallback)
+
     if (dto.search) {
-      where.OR = [
-        { label: { contains: dto.search } },
-        { definition: { contains: dto.search } },
-      ];
+      where.label = dto.search; // Repo handles partial match logic
     }
 
     const [nodes, total] = await Promise.all([

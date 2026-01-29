@@ -23,7 +23,7 @@ export class CreateConceptDto {
   })
   @IsOptional()
   @IsString()
-  definition?: string;
+  definition?: string = '';
 
   @ApiPropertyOptional({
     description: 'Hierarchy level of the concept',
@@ -34,10 +34,11 @@ export class CreateConceptDto {
   @IsInt()
   @Min(0)
   @Type(() => Number)
-  level?: number;
+  level?: number = 0;
 
   @ApiPropertyOptional({
     description: 'Array of variant labels',
+    default: [],
     example: ['root', 'base'],
     type: [String],
   })

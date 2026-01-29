@@ -124,6 +124,67 @@ export class ConceptRepository {
   }
 
   // ============================================
+  // NAVIGATION & DRILL-DOWN
+  // ============================================
+
+  async findChildren(
+    parentId: string,
+    limit: number,
+    offset: number,
+  ): Promise<DomainConcept[]> {
+    const res = await this.databaseService.db.executeRead((trx) =>
+      trx
+        .selectFrom('concepts')
+        .innerJoin('edges', 'edges.child_id', 'concepts.id')
+        .selectAll('concepts')
+        .where('edges.parent_id', '=', parentId)
+        .orderBy('concepts.level', 'asc')
+        .orderBy('concepts.label', 'asc')
+        .limit(limit)
+        .offset(offset)
+        .execute(),
+    );
+    return res.map(this.mapToDomainConcept);
+  }
+
+  async countChildren(parentId: string): Promise<number> {
+    return this.databaseService.db.executeRead(async (trx) => {
+      const res = await trx
+        .selectFrom('edges')
+        .where('parent_id', '=', parentId)
+        .select(trx.fn.count('child_id').as('count'))
+        .executeTakeFirst();
+      return Number(res?.count || 0);
+    });
+  }
+
+  async findParents(childId: string): Promise<DomainConcept[]> {
+    const res = await this.databaseService.db.executeRead((trx) =>
+      trx
+        .selectFrom('concepts')
+        .innerJoin('edges', 'edges.parent_id', 'concepts.id')
+        .selectAll('concepts')
+        .where('edges.child_id', '=', childId)
+        .execute(),
+    );
+    return res.map(this.mapToDomainConcept);
+  }
+
+  // ============================================
+  // OBSERVABILITY & STATS
+  // ============================================
+
+  async getMaxDepth(): Promise<number> {
+    return this.databaseService.db.executeRead(async (trx) => {
+      const res = await trx
+        .selectFrom('concepts')
+        .select(trx.fn.max('level').as('max_level'))
+        .executeTakeFirst();
+      return Number(res?.max_level || 0);
+    });
+  }
+
+  // ============================================
   // GRAPH ALGORITHMS (Recursive CTEs)
   // ============================================
 

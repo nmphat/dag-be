@@ -7,12 +7,12 @@ export class CreateEdgeDto {
     example: 'node-1',
   })
   @IsString()
-  parentId: string;
+  parentId: string = '';
 
   @ApiProperty({
     description: 'ID of the child node',
     example: 'node-2',
   })
   @IsString()
-  childId: string;
+  childId: string = '';
 }
