@@ -42,7 +42,7 @@ export class GraphService {
   ): Promise<SubgraphResponseDto> {
     const depth = query.depth ?? 2;
     const direction = query.direction ?? SubgraphDirection.BOTH;
-    const maxNodes = query.maxNodes ?? 200;
+    const maxNodes = query.maxNodes ?? 100;
 
     // Get center node
     const centerNode = await this.conceptRepo.findById(nodeId);
@@ -59,10 +59,19 @@ export class GraphService {
     await this.bfsTraverse(nodeId, depth, direction, maxNodes, result);
 
     // Convert to response
+    // Convert to response
     const truncated = result.nodes.size >= maxNodes;
-    const nodes = await this.enrichWithVariants(
-      Array.from(result.nodes.values()),
-    );
+
+    // Enrich with variants if requested
+    let nodes: ConceptResponseDto[];
+    if (query.includeDetails !== false) {
+      nodes = await this.enrichWithVariants(Array.from(result.nodes.values()));
+    } else {
+      nodes = Array.from(result.nodes.values()).map((n) =>
+        toConceptResponse(n, []),
+      );
+    }
+
     const edges = this.parseEdges(result.edges);
 
     // Get variants for center node
@@ -92,57 +101,85 @@ export class GraphService {
     maxNodes: number,
     result: TraversalResult,
   ): Promise<void> {
-    const queue: Array<{ id: string; depth: number }> = [
-      { id: startId, depth: 0 },
-    ];
+    let currentLayer = [startId];
+    let currentDepth = 0;
     const visited = new Set<string>([startId]);
 
-    while (queue.length > 0 && result.nodes.size < maxNodes) {
-      const current = queue.shift()!;
+    while (
+      currentLayer.length > 0 &&
+      currentDepth < maxDepth &&
+      result.nodes.size < maxNodes
+    ) {
+      const nextLayer: string[] = [];
+      const layerIds = currentLayer;
 
-      if (current.depth >= maxDepth) continue;
+      // Prepare batch fetch promises for current layer
+      const fetchPromises: Promise<any>[] = [];
 
-      // Get neighbors based on direction
-      const neighbors: Array<{ node: DomainConcept; edgeKey: string }> = [];
-
+      // 1. Fetch children (Down direction)
       if (
         direction === SubgraphDirection.DOWN ||
         direction === SubgraphDirection.BOTH
       ) {
-        const children = await this.edgeRepo.getChildren(current.id);
-        for (const child of children) {
-          neighbors.push({
-            node: child,
-            edgeKey: `${current.id}->${child.id}`,
-          });
-        }
+        fetchPromises.push(this.edgeRepo.getChildrenOfConcepts(layerIds));
+      } else {
+        fetchPromises.push(Promise.resolve([]));
       }
 
+      // 2. Fetch parents (Up direction)
       if (
         direction === SubgraphDirection.UP ||
         direction === SubgraphDirection.BOTH
       ) {
-        const parents = await this.edgeRepo.getParents(current.id);
-        for (const parent of parents) {
-          neighbors.push({
-            node: parent,
-            edgeKey: `${parent.id}->${current.id}`,
-          });
-        }
+        fetchPromises.push(this.edgeRepo.getParentsOfConcepts(layerIds));
+      } else {
+        fetchPromises.push(Promise.resolve([]));
       }
 
-      // Process neighbors
-      for (const { node, edgeKey } of neighbors) {
+      // Execute batch queries
+      const [childrenResults, parentsResults] =
+        await Promise.all(fetchPromises);
+
+      // Process children results
+      const childrenBatch = childrenResults as Array<{
+        parentId: string;
+        child: DomainConcept;
+      }>;
+      for (const { parentId, child } of childrenBatch) {
         if (result.nodes.size >= maxNodes) break;
 
+        const edgeKey = `${parentId}->${child.id}`;
         result.edges.add(edgeKey);
 
-        if (!visited.has(node.id)) {
-          visited.add(node.id);
-          result.nodes.set(node.id, node);
-          queue.push({ id: node.id, depth: current.depth + 1 });
+        // Add node if not visited
+        // Note: Even if visited, we added the edge above (which is correct for graph)
+        if (!visited.has(child.id)) {
+          visited.add(child.id);
+          result.nodes.set(child.id, child);
+          nextLayer.push(child.id);
         }
       }
+
+      // Process parents results
+      const parentsBatch = parentsResults as Array<{
+        childId: string;
+        parent: DomainConcept;
+      }>;
+      for (const { childId, parent } of parentsBatch) {
+        if (result.nodes.size >= maxNodes) break;
+
+        const edgeKey = `${parent.id}->${childId}`;
+        result.edges.add(edgeKey);
+
+        if (!visited.has(parent.id)) {
+          visited.add(parent.id);
+          result.nodes.set(parent.id, parent);
+          nextLayer.push(parent.id);
+        }
+      }
+
+      currentLayer = nextLayer;
+      currentDepth++;
     }
   }
 
@@ -505,22 +542,19 @@ export class GraphService {
     if (concepts.length === 0) return [];
 
     // Batch fetch variants for all concepts
+    // Batch fetch variants for all concepts
     const variantsMap = new Map<string, string[]>();
 
-    // For performance, we fetch variants in parallel but limit batch size
-    const batchSize = 50;
-    for (let i = 0; i < concepts.length; i += batchSize) {
-      const batch = concepts.slice(i, i + batchSize);
-      const variantResults = await Promise.all(
-        batch.map((c) => this.variantRepo.findByConceptId(c.id)),
-      );
+    // Use bulk fetch
+    const conceptIds = concepts.map((c) => c.id);
+    const allVariants = await this.variantRepo.findByConceptIds(conceptIds);
 
-      batch.forEach((concept, idx) => {
-        variantsMap.set(
-          concept.id,
-          variantResults[idx].map((v) => v.name),
-        );
-      });
+    // Group variants by concept
+    for (const variant of allVariants) {
+      if (!variantsMap.has(variant.conceptId)) {
+        variantsMap.set(variant.conceptId, []);
+      }
+      variantsMap.get(variant.conceptId)!.push(variant.name);
     }
 
     return concepts.map((c) =>

@@ -53,6 +53,19 @@ export class VariantRepository {
     return res.map(this.mapToDomainVariant);
   }
 
+  async findByConceptIds(conceptIds: string[]): Promise<DomainVariant[]> {
+    if (conceptIds.length === 0) return [];
+
+    const res = await this.databaseService.db.executeRead((trx) =>
+      trx
+        .selectFrom('variants')
+        .selectAll()
+        .where('concept_id', 'in', conceptIds)
+        .execute(),
+    );
+    return res.map(this.mapToDomainVariant);
+  }
+
   async update(id: number, name: string): Promise<DomainVariant> {
     await this.databaseService.db
       .write()

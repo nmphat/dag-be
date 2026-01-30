@@ -163,6 +163,48 @@ export class EdgeRepository {
     return res.map(this.mapToDomainConcept);
   }
 
+  async getParentsOfConcepts(
+    conceptIds: string[],
+  ): Promise<Array<{ childId: string; parent: DomainConcept }>> {
+    if (conceptIds.length === 0) return [];
+
+    const res = await this.databaseService.db.executeRead((trx) =>
+      trx
+        .selectFrom('concepts')
+        .innerJoin('edges', 'edges.parent_id', 'concepts.id')
+        .selectAll('concepts')
+        .select('edges.child_id as relation_owner_id')
+        .where('edges.child_id', 'in', conceptIds)
+        .execute(),
+    );
+
+    return res.map((row) => ({
+      childId: (row as any).relation_owner_id,
+      parent: this.mapToDomainConcept(row),
+    }));
+  }
+
+  async getChildrenOfConcepts(
+    conceptIds: string[],
+  ): Promise<Array<{ parentId: string; child: DomainConcept }>> {
+    if (conceptIds.length === 0) return [];
+
+    const res = await this.databaseService.db.executeRead((trx) =>
+      trx
+        .selectFrom('concepts')
+        .innerJoin('edges', 'edges.child_id', 'concepts.id')
+        .selectAll('concepts')
+        .select('edges.parent_id as relation_owner_id')
+        .where('edges.parent_id', 'in', conceptIds)
+        .execute(),
+    );
+
+    return res.map((row) => ({
+      parentId: (row as any).relation_owner_id,
+      child: this.mapToDomainConcept(row),
+    }));
+  }
+
   async detectCycle(parentId: string, childId: string): Promise<boolean> {
     return this.canReach(childId, parentId);
   }
