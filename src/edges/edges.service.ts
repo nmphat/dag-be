@@ -3,9 +3,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Concept } from '@prisma/client';
 import { ConceptRepository, EdgeRepository } from '../database/repositories';
 import { CreateEdgeDto } from './dto';
+import { DomainConcept } from 'src/database/repositories/domain.types';
 
 @Injectable()
 export class EdgesService {
@@ -48,11 +48,11 @@ export class EdgesService {
     }
   }
 
-  async getParents(nodeId: string): Promise<Concept[]> {
+  async getParents(nodeId: string): Promise<DomainConcept[]> {
     return this.edgeRepo.getParents(nodeId);
   }
 
-  async getChildren(nodeId: string): Promise<Concept[]> {
+  async getChildren(nodeId: string): Promise<DomainConcept[]> {
     return this.edgeRepo.getChildren(nodeId);
   }
 
