@@ -49,6 +49,7 @@ export class TaxonomyPathStreamService {
   ): Promise<void> {
     const maxDepth = options.maxDepth ?? this.DEFAULT_MAX_DEPTH;
     const maxPaths = options.maxPaths ?? this.DEFAULT_MAX_PATHS;
+    const CONCURRENCY = options.concurrency ?? 10;
 
     const startConcept = await this.getConceptCached(conceptId);
     if (!startConcept) {
@@ -58,66 +59,77 @@ export class TaxonomyPathStreamService {
     let pathsFound = 0;
     let nodesProcessed = 0;
 
-    /**
-     * Recursive backtracking DFS
-     * @param nodeId - Current node
-     * @param currentPath - Path from start concept to current node
-     * @param depth - Current depth
-     */
-    const dfs = async (
-      nodeId: string,
-      currentPath: string[],
-      depth: number,
-    ): Promise<void> => {
-      // Stop if max paths reached
-      if (pathsFound >= maxPaths) return;
+    // Initialize Stack (Iterative DFS)
+    // We use a LIFO approach (processing from the end) to mimic DFS.
+    // This ensures we reach roots quickly without expanding the entire width of the graph first (BFS).
+    const queue: { nodeId: string; currentPath: string[]; depth: number }[] = [
+      { nodeId: conceptId, currentPath: [conceptId], depth: 0 },
+    ];
 
-      nodesProcessed++;
+    while (queue.length > 0 && pathsFound < maxPaths) {
+      // Process a batch from the END (Stack / LIFO)
+      // This is crucial for performance when finding paths to deep roots.
+      const batchStartIndex = Math.max(0, queue.length - CONCURRENCY);
+      const batch = queue.splice(batchStartIndex, CONCURRENCY);
 
-      // Progress update
-      if (nodesProcessed % this.PROGRESS_INTERVAL === 0) {
-        subject.next({
-          type: 'progress',
-          progress: { found: pathsFound, processed: nodesProcessed },
-        });
+      const results = await Promise.all(
+        batch.map(async ({ nodeId, currentPath, depth }) => {
+          // Check limits again inside (for fast exit)
+          if (pathsFound >= maxPaths) return [];
+
+          nodesProcessed++;
+          if (nodesProcessed % this.PROGRESS_INTERVAL === 0) {
+            subject.next({
+              type: 'progress',
+              progress: { found: pathsFound, processed: nodesProcessed },
+            });
+          }
+
+          // Depth limit
+          if (depth >= maxDepth) {
+            const resolvedPath = await this.resolvePathIds(currentPath);
+            subject.next({ type: 'path', path: resolvedPath });
+            pathsFound++;
+            return [];
+          }
+
+          // Get parents
+          const parents = await this.getParentsCached(nodeId);
+
+          // Root reached
+          if (parents.length === 0) {
+            const resolvedPath = await this.resolvePathIds(currentPath);
+            subject.next({ type: 'path', path: resolvedPath });
+            pathsFound++;
+            return [];
+          }
+
+          // Prepare next items
+          const nextItems: typeof queue = [];
+          for (const parentId of parents) {
+            // Cycle check
+            if (currentPath.includes(parentId)) {
+              // We should probably log this only occasionally to avoid spam
+              // console.warn(`Cycle: ${parentId} in path`);
+              continue;
+            }
+            nextItems.push({
+              nodeId: parentId,
+              currentPath: [...currentPath, parentId],
+              depth: depth + 1,
+            });
+          }
+          return nextItems;
+        }),
+      );
+
+      // Add new items to queue
+      // Flatten results
+      for (const newItems of results) {
+        if (pathsFound >= maxPaths) break;
+        queue.push(...newItems);
       }
-
-      // Depth limit → emit partial path
-      if (depth >= maxDepth) {
-        const resolvedPath = await this.resolvePathIds(currentPath);
-        subject.next({ type: 'path', path: resolvedPath });
-        pathsFound++;
-        return;
-      }
-
-      // Get parents
-      const parents = await this.getParentsCached(nodeId);
-
-      // ROOT (no parents) → emit complete path
-      if (parents.length === 0) {
-        const resolvedPath = await this.resolvePathIds(currentPath);
-        subject.next({ type: 'path', path: resolvedPath });
-        pathsFound++;
-        return;
-      }
-
-      // Recursive: explore each parent
-      for (const parentId of parents) {
-        if (pathsFound >= maxPaths) return;
-
-        // Cycle detection
-        if (currentPath.includes(parentId)) {
-          console.warn(`Cycle: ${parentId} in path`);
-          continue;
-        }
-
-        // Backtracking: add parent → recurse → (auto removed on return)
-        await dfs(parentId, [...currentPath, parentId], depth + 1);
-      }
-    };
-
-    // Start DFS from conceptId
-    await dfs(conceptId, [conceptId], 0);
+    }
 
     subject.next({
       type: 'done',

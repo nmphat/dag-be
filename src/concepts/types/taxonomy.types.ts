@@ -17,4 +17,5 @@ export interface PathChunk {
 export interface StreamOptions {
   maxDepth?: number;
   maxPaths?: number;
+  concurrency?: number;
 }
