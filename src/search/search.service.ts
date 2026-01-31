@@ -266,7 +266,7 @@ export class SearchService implements OnModuleInit {
       nextCursor: hasMore || direction === 'prev' ? nextCursor : undefined,
       prevCursor: cursor ? prevCursor : undefined, // No prev on first page
       hasNext: direction === 'next' ? hasMore : true,
-      hasPrev: !!cursor,
+      hasPrev: direction === 'prev' ? hasMore : !!cursor,
     };
   }
 
@@ -277,19 +277,25 @@ export class SearchService implements OnModuleInit {
     type: 'children' | 'parents',
     nodeId: string,
     query?: string,
-    limit = 20,
-    offset = 0,
+    pageSize = 20,
+    cursor?: string,
+    direction: 'next' | 'prev' = 'next',
     parentIds?: string[], // Used for 'parents' type search
-  ): Promise<{ concepts: ConceptDocument[]; total: number; took: number }> {
+  ): Promise<SearchResult> {
     const must: any[] = [];
 
     if (type === 'children') {
-      // Find all where parent_ids contains nodeId
       must.push({ term: { parent_ids: nodeId } });
     } else {
-      // Find all with specific IDs
       if (!parentIds || parentIds.length === 0) {
-        return { concepts: [], total: 0, took: 0 };
+        return {
+          concepts: [],
+          total: 0,
+          took: 0,
+          pageSize,
+          hasNext: false,
+          hasPrev: false,
+        };
       }
       must.push({ ids: { values: parentIds } });
     }
@@ -320,26 +326,54 @@ export class SearchService implements OnModuleInit {
       });
     }
 
-    const start = performance.now();
+    const sort = this.buildSort(undefined, !!query);
+    const searchAfter = cursor ? this.decodeCursor(cursor) : undefined;
+    const effectiveSort = direction === 'prev' ? this.reverseSort(sort) : sort;
+
     const response = await this.elasticsearchService.search({
       index: this.indexName,
-      from: offset,
-      size: limit,
+      size: pageSize + 1,
       query: { bool: { must } },
+      sort: effectiveSort,
+      ...(searchAfter && { search_after: searchAfter }),
       track_total_hits: true,
     });
-    const took = Math.round(performance.now() - start);
 
+    let hits = response.hits.hits;
     const totalHits = response.hits.total as SearchTotalHits;
     const total = typeof totalHits === 'number' ? totalHits : totalHits.value;
 
+    const hasMore = hits.length > pageSize;
+    if (hasMore) {
+      hits = hits.slice(0, pageSize);
+    }
+
+    if (direction === 'prev') {
+      hits = hits.reverse();
+    }
+
+    const firstHit = hits[0];
+    const lastHit = hits[hits.length - 1];
+
+    const nextCursor = lastHit?.sort
+      ? this.encodeCursor(lastHit.sort)
+      : undefined;
+    const prevCursor = firstHit?.sort
+      ? this.encodeCursor(firstHit.sort)
+      : undefined;
+
     return {
-      concepts: response.hits.hits.map((hit) => ({
+      concepts: hits.map((hit) => ({
         ...(hit._source as ConceptDocument),
         _score: hit._score || 0,
       })),
       total,
-      took,
+      took: response.took || 0,
+      pageSize,
+      nextCursor: hasMore || direction === 'prev' ? nextCursor : undefined,
+      prevCursor: cursor ? prevCursor : undefined,
+      hasNext: direction === 'next' ? hasMore : true,
+      hasPrev: direction === 'prev' ? hasMore : !!cursor,
     };
   }
 

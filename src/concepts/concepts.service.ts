@@ -48,67 +48,41 @@ export class ConceptsService {
 
   async getChildren(
     parentId: string,
-    limit: number,
-    offset: number,
+    pageSize = 20,
+    cursor?: string,
+    direction: 'next' | 'prev' = 'next',
     q?: string,
   ) {
-    if (q) {
-      // Use ElasticSearch for fuzzy search within children
-      const { concepts, total, took } =
-        await this.searchService.searchRelations(
-          'children',
-          parentId,
-          q,
-          limit,
-          offset,
-        );
-      return {
-        nodes: concepts,
-        total,
-        took,
-      };
-    }
-
-    // Fallback to SQL for pure pagination (exact match on parent_id)
-    const [children, total] = await Promise.all([
-      this.conceptRepo.findChildren(parentId, limit, offset),
-      this.conceptRepo.countChildren(parentId),
-    ]);
-
-    return {
-      nodes: children,
-      total,
-    };
+    // Standardize on SearchService for cursor-based navigation
+    return this.searchService.searchRelations(
+      'children',
+      parentId,
+      q,
+      pageSize,
+      cursor,
+      direction,
+    );
   }
 
-  async getParents(childId: string, limit: number, offset: number, q?: string) {
+  async getParents(
+    childId: string,
+    pageSize = 20,
+    cursor?: string,
+    direction: 'next' | 'prev' = 'next',
+    q?: string,
+  ) {
     const parents = await this.edgeRepo.getParents(childId);
     const parentIds = parents.map((p) => p.id);
 
-    if (q) {
-      // Use ElasticSearch for fuzzy search within specific parent IDs
-      const { concepts, total, took } =
-        await this.searchService.searchRelations(
-          'parents',
-          childId,
-          q,
-          limit,
-          offset,
-          parentIds,
-        );
-      return {
-        nodes: concepts,
-        total,
-        took,
-      };
-    }
-
-    // Basic pagination from the already fetched parents list (usually small)
-    const sliced = parents.slice(offset, offset + limit);
-    return {
-      nodes: sliced,
-      total: parents.length,
-    };
+    return this.searchService.searchRelations(
+      'parents',
+      childId,
+      q,
+      pageSize,
+      cursor,
+      direction,
+      parentIds,
+    );
   }
 
   async getPathsToRoot(id: string): Promise<DomainConcept[][]> {

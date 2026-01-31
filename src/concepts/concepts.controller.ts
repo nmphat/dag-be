@@ -20,7 +20,6 @@ import { map, Observable } from 'rxjs';
 import { SearchService } from 'src/search/search.service';
 import { ConceptsService } from './concepts.service';
 import {
-  ConceptChildrenResponseDto,
   ConceptResponseDto,
   ConceptStatsResponseDto,
   CreateConceptDto,
@@ -89,38 +88,67 @@ export class ConceptsController {
   @ApiOperation({
     summary: 'Get immediate children (Drill-down navigation)',
     description:
-      'Paginated list of children. Critical for nodes with thousands of sub-concepts.',
+      'Paginated list of children using cursors. Same behavior as home search.',
   })
-  @ApiResponse({ type: ConceptChildrenResponseDto })
   async getChildren(
     @Param('id') id: string,
-    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
-    @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
+    @Query('pageSize', new DefaultValuePipe(20), ParseIntPipe) pageSize: number,
+    @Query('cursor') cursor?: string,
+    @Query('direction', new DefaultValuePipe('next'))
+    direction?: 'next' | 'prev',
     @Query('q') q?: string,
-  ): Promise<ConceptChildrenResponseDto> {
-    const result = await this.conceptsService.getChildren(id, limit, offset, q);
+  ) {
+    const result = await this.conceptsService.getChildren(
+      id,
+      pageSize,
+      cursor,
+      direction as any,
+      q,
+    );
     return {
       parentId: id,
-      pagination: { limit, offset, total: result.total },
-      data: result.nodes.map((n) => this.mapToResponse(n)),
+      pageSize: result.pageSize,
+      total: result.total,
+      took: result.took,
+      nextCursor: result.nextCursor,
+      prevCursor: result.prevCursor,
+      hasNext: result.hasNext,
+      hasPrev: result.hasPrev,
+      concepts: result.concepts.map((n) => this.mapToResponse(n as any)),
     };
   }
 
   @Get(':id/parents')
   @ApiOperation({
     summary: 'Get immediate parents (Pagination & Fuzzy Search)',
+    description:
+      'Paginated list of parents using cursors. Same behavior as home search.',
   })
   async getParents(
     @Param('id') id: string,
-    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
-    @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
+    @Query('pageSize', new DefaultValuePipe(20), ParseIntPipe) pageSize: number,
+    @Query('cursor') cursor?: string,
+    @Query('direction', new DefaultValuePipe('next'))
+    direction?: 'next' | 'prev',
     @Query('q') q?: string,
-  ): Promise<any> {
-    const result = await this.conceptsService.getParents(id, limit, offset, q);
+  ) {
+    const result = await this.conceptsService.getParents(
+      id,
+      pageSize,
+      cursor,
+      direction as any,
+      q,
+    );
     return {
       childId: id,
-      pagination: { limit, offset, total: result.total },
-      data: result.nodes.map((n) => this.mapToResponse(n)),
+      pageSize: result.pageSize,
+      total: result.total,
+      took: result.took,
+      nextCursor: result.nextCursor,
+      prevCursor: result.prevCursor,
+      hasNext: result.hasNext,
+      hasPrev: result.hasPrev,
+      concepts: result.concepts.map((n) => this.mapToResponse(n as any)),
     };
   }
 
