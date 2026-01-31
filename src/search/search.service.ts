@@ -7,6 +7,7 @@ import {
   Logger,
   OnModuleInit,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ElasticsearchService } from '@nestjs/elasticsearch';
 
 export interface ConceptDocument {
@@ -41,11 +42,19 @@ export interface SearchOptions {
 @Injectable()
 export class SearchService implements OnModuleInit {
   private readonly logger = new Logger(SearchService.name);
-  private readonly indexName = process.env.ES_INDEX_NAME || 'concepts';
+  private readonly indexName: string;
   private readonly MAX_PAGE_SIZE = 100;
   private readonly DEFAULT_FIELDS = ['label^3', 'definition', 'variants^2'];
 
-  constructor(private readonly elasticsearchService: ElasticsearchService) {}
+  constructor(
+    private readonly elasticsearchService: ElasticsearchService,
+    private readonly configService: ConfigService,
+  ) {
+    this.indexName = this.configService.get<string>(
+      'ES_INDEX_NAME',
+      'concepts',
+    );
+  }
 
   async onModuleInit() {
     await this.createIndex();
@@ -287,10 +296,26 @@ export class SearchService implements OnModuleInit {
 
     if (query) {
       must.push({
-        multi_match: {
-          query,
-          fields: this.DEFAULT_FIELDS,
-          fuzziness: 'AUTO',
+        bool: {
+          should: [
+            {
+              multi_match: {
+                query,
+                fields: ['label^3', 'variants^2'],
+                type: 'bool_prefix',
+                boost: 10,
+              },
+            },
+            {
+              multi_match: {
+                query,
+                fields: ['label^3', 'variants^2'],
+                fuzziness: 'AUTO',
+                boost: 1,
+              },
+            },
+          ],
+          minimum_should_match: 1,
         },
       });
     }
