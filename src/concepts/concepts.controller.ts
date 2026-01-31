@@ -96,11 +96,30 @@ export class ConceptsController {
     @Param('id') id: string,
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
     @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
+    @Query('q') q?: string,
   ): Promise<ConceptChildrenResponseDto> {
-    const result = await this.conceptsService.getChildren(id, limit, offset);
+    const result = await this.conceptsService.getChildren(id, limit, offset, q);
     return {
       parentId: id,
-      pagination: { limit, offset },
+      pagination: { limit, offset, total: result.total },
+      data: result.nodes.map((n) => this.mapToResponse(n)),
+    };
+  }
+
+  @Get(':id/parents')
+  @ApiOperation({
+    summary: 'Get immediate parents (Pagination & Fuzzy Search)',
+  })
+  async getParents(
+    @Param('id') id: string,
+    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
+    @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
+    @Query('q') q?: string,
+  ): Promise<any> {
+    const result = await this.conceptsService.getParents(id, limit, offset, q);
+    return {
+      childId: id,
+      pagination: { limit, offset, total: result.total },
       data: result.nodes.map((n) => this.mapToResponse(n)),
     };
   }

@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { EdgesController } from './edges.controller';
+import { SearchModule } from '../search/search.module';
 import { EdgesService } from './edges.service';
 
 @Module({
-  controllers: [EdgesController],
+  imports: [SearchModule],
   providers: [EdgesService],
   exports: [EdgesService],
 })

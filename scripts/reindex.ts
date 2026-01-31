@@ -33,6 +33,11 @@ interface Variant {
   name: string;
 }
 
+interface Edge {
+  parent_id: string;
+  child_id: string;
+}
+
 async function main() {
   console.log('🚀 Starting Re-Indexing Process...');
 
@@ -98,6 +103,7 @@ async function main() {
               keyword: { type: 'keyword' },
             },
           },
+          parent_ids: { type: 'keyword' },
         },
       },
     });
@@ -126,6 +132,22 @@ async function main() {
       variantsMap.get(v.concept_id)?.push(v.name);
     });
 
+    console.log('📥 Fetching edges from database...');
+    const [edges] = await connection.execute(
+      'SELECT parent_id, child_id FROM edges',
+    );
+    const edgeRows = edges as Edge[];
+    console.log(`   Found ${edgeRows.length} edges.`);
+
+    // Group parents by child_id
+    const parentsMap = new Map<string, string[]>();
+    edgeRows.forEach((e) => {
+      if (!parentsMap.has(e.child_id)) {
+        parentsMap.set(e.child_id, []);
+      }
+      parentsMap.get(e.child_id)?.push(e.parent_id);
+    });
+
     // 5. Indexing Loop
     console.log('📝 Indexing to Elasticsearch...');
     let indexedNodes = 0;
@@ -141,6 +163,7 @@ async function main() {
           definition: concept.definition,
           level: concept.level,
           variants: variantsMap.get(concept.id) || [],
+          parent_ids: parentsMap.get(concept.id) || [],
         },
       ]);
 

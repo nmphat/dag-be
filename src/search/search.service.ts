@@ -15,6 +15,7 @@ export interface ConceptDocument {
   definition?: string;
   level: number;
   variants?: string[];
+  parent_ids?: string[]; // Direct parent IDs for relation-based filtering
   _score?: number;
   _highlight?: Record<string, string[]>;
 }
@@ -102,6 +103,7 @@ export class SearchService implements OnModuleInit {
               analyzer: 'custom_analyzer',
               fields: { keyword: { type: 'keyword' } },
             },
+            parent_ids: { type: 'keyword' },
           },
         },
       });
@@ -256,6 +258,63 @@ export class SearchService implements OnModuleInit {
       prevCursor: cursor ? prevCursor : undefined, // No prev on first page
       hasNext: direction === 'next' ? hasMore : true,
       hasPrev: !!cursor,
+    };
+  }
+
+  /**
+   * Search within direct relations (children or parents).
+   */
+  async searchRelations(
+    type: 'children' | 'parents',
+    nodeId: string,
+    query?: string,
+    limit = 20,
+    offset = 0,
+    parentIds?: string[], // Used for 'parents' type search
+  ): Promise<{ concepts: ConceptDocument[]; total: number; took: number }> {
+    const must: any[] = [];
+
+    if (type === 'children') {
+      // Find all where parent_ids contains nodeId
+      must.push({ term: { parent_ids: nodeId } });
+    } else {
+      // Find all with specific IDs
+      if (!parentIds || parentIds.length === 0) {
+        return { concepts: [], total: 0, took: 0 };
+      }
+      must.push({ ids: { values: parentIds } });
+    }
+
+    if (query) {
+      must.push({
+        multi_match: {
+          query,
+          fields: this.DEFAULT_FIELDS,
+          fuzziness: 'AUTO',
+        },
+      });
+    }
+
+    const start = performance.now();
+    const response = await this.elasticsearchService.search({
+      index: this.indexName,
+      from: offset,
+      size: limit,
+      query: { bool: { must } },
+      track_total_hits: true,
+    });
+    const took = Math.round(performance.now() - start);
+
+    const totalHits = response.hits.total as SearchTotalHits;
+    const total = typeof totalHits === 'number' ? totalHits : totalHits.value;
+
+    return {
+      concepts: response.hits.hits.map((hit) => ({
+        ...(hit._source as ConceptDocument),
+        _score: hit._score || 0,
+      })),
+      total,
+      took,
     };
   }
 

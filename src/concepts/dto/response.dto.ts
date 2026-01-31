@@ -43,6 +43,9 @@ export class ConceptPaginationDto {
 
   @ApiProperty({ example: 0 })
   offset: number;
+
+  @ApiProperty({ example: 100 })
+  total: number;
 }
 
 export class ConceptChildrenResponseDto {

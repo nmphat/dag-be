@@ -3,15 +3,19 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ConceptRepository, EdgeRepository } from '../database/repositories';
-import { CreateEdgeDto } from './dto';
 import { DomainConcept } from 'src/database/repositories/domain.types';
+import { ConceptRepository, EdgeRepository } from '../database/repositories';
+import { VariantRepository } from '../database/repositories/variants.repository';
+import { SearchService } from '../search/search.service';
+import { CreateEdgeDto } from './dto';
 
 @Injectable()
 export class EdgesService {
   constructor(
     private readonly edgeRepo: EdgeRepository,
     private readonly conceptRepo: ConceptRepository,
+    private readonly variantRepo: VariantRepository,
+    private readonly searchService: SearchService,
   ) {}
 
   async create(dto: CreateEdgeDto): Promise<void> {
@@ -38,14 +42,39 @@ export class EdgesService {
 
     // Create edge
     await this.edgeRepo.create(dto.parentId, dto.childId);
+
+    // Sync child to search index
+    await this.syncConceptToSearch(dto.childId);
   }
 
   async remove(parentId: string, childId: string): Promise<void> {
     try {
       await this.edgeRepo.delete(parentId, childId);
+      // Sync child to search index
+      await this.syncConceptToSearch(childId);
     } catch {
       throw new NotFoundException(`Edge not found`);
     }
+  }
+
+  // Helper for re-indexing a concept (direct repo usage to avoid circular dependency)
+  private async syncConceptToSearch(id: string) {
+    const concept = await this.conceptRepo.findById(id);
+    if (!concept) return;
+
+    const [variants, parents] = await Promise.all([
+      this.variantRepo.findByConceptId(id),
+      this.edgeRepo.getParents(id),
+    ]);
+
+    await this.searchService.indexConcept({
+      id: concept.id,
+      label: concept.label,
+      definition: concept.definition ?? undefined,
+      level: concept.level,
+      variants: variants.map((v) => v.name),
+      parent_ids: parents.map((p) => p.id),
+    });
   }
 
   async getParents(nodeId: string): Promise<DomainConcept[]> {
