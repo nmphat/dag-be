@@ -22,7 +22,8 @@
     "prisma:migrate": "prisma migrate dev",
     "docker:setup": "cp .env docker/.env && cd docker && docker-compose up -d && chmod +x setup-replication.sh && ./setup-replication.sh",
     "db:crawl": "ts-node scripts/gen-from-wikidata.ts",
-    "db:import": "cp .env scripts && ts-node scripts/import-sample-data.ts",
+    "db:import:sample": "cp .env scripts && ts-node scripts/import-sample-data.ts",
+    "db:import:wiki": "cp .env scripts && ts-node scripts/import-wiki-data.ts",
     "es:reindex": "cp .env scripts && ts-node scripts/reindex.ts"
   },
   "dependencies": {

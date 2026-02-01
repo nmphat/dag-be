@@ -26,9 +26,9 @@ interface Edge {
 
 const TRACKER_FILE = join(
   __dirname,
-  '../docs/sample-data/imported.txt',
+  '../docs/sample-data/from-wikidata/imported.txt',
 );
-const BASE_DATA_DIR = join(__dirname, '../docs');
+const BASE_DATA_DIR = join(__dirname, '../docs/sample-data/from-wikidata');
 
 async function main() {
   const args = process.argv.slice(2);

@@ -61,13 +61,17 @@ docs/sample-data/from-wikidata/
 
 ```bash
 # Setup Docker environment (MariaDB, Elasticsearch, Redis)
+chmod +x docker/setup-replication.sh
 pnpm docker:setup
+
+# or manual run with bash `bash -x docker/setup-replication.sh`
 
 # Run Prisma migrations
 pnpm prisma:migrate
 
 # Import sample data into the database
-pnpm db:import
+pnpm db:import:sample
+pnpm db:import:wiki # ~ 30 min
 
 # Reindex Elasticsearch
 pnpm es:reindex
