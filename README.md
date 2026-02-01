@@ -2,8 +2,6 @@
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
 
   <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
     <p align="center">
@@ -25,18 +23,65 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
-## Project setup
+## Quick Start
+
+### 1. Environment Setup
+
+Prepare the environment variables:
 
 ```bash
-$ pnpm install
+cp .env.example .env
 ```
 
-## Compile and run the project
+### 2. Install Dependencies
 
 ```bash
-# development
-$ pnpm run start
+pnpm install
+```
 
+### 3. Sample Data Setup
+
+Download and extract sample Wikidata into the following directory:
+`/home/pc/0131/be/docs/sample-data/from-wikidata`
+
+**Expected Structure:**
+
+```text
+docs/sample-data/from-wikidata/
+├── category_folder_q123/
+│   ├── concepts.json
+│   └── edges.json
+├── category_folder_q456/
+│   ├── concepts.json
+│   └── edges.json
+└── imported.txt
+```
+
+### 4. Infrastructure & Database Setup
+
+```bash
+# Setup Docker environment (MariaDB, Elasticsearch, Redis)
+pnpm docker:setup
+
+# Run Prisma migrations
+pnpm prisma:migrate
+
+# Import sample data into the database
+pnpm db:import
+
+# Reindex Elasticsearch
+pnpm es:reindex
+```
+
+### 5. Start the Application
+
+```bash
+pnpm start
+```
+
+## Advanced Commands
+
+```bash
 # watch mode
 $ pnpm run start:dev
 
@@ -64,8 +109,8 @@ When you're ready to deploy your NestJS application to production, there are som
 If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
 
 ```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
+pnpm install -g @nestjs/mau
+mau deploy
 ```
 
 With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
