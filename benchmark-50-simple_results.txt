@@ -1,0 +1,61 @@
+
+╔═══════════════════════════════════════════════════════════════════╗
+║           TAXONOMY EXPLORER - PERFORMANCE BENCHMARK               ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+🚀 Starting Benchmark Suite
+
+======================================================================
+🔧 TEST_MODE: SAMPLE
+📋 Loaded 11 scenarios for execution.
+
+✅ API is available
+
+📥 Fetching sample concepts for navigation benchmarks...
+   Using conceptId: n_065172
+   Using parent:    n_065172
+   Using childId:   n_065172
+
+📊 Dataset Stats:
+   Total Nodes: 100,000
+   Total Edges: 117,809
+   Max Depth:   4
+
+⏱️  search_eng_basic               p50:  497.6ms | p95:  901.9ms | avg:  562.1ms
+⏱️  search_eng_acronym             p50:  178.9ms | p95:  236.6ms | avg:  184.7ms
+⏱️  search_eng_framework           p50:  339.5ms | p95:  491.8ms | avg:  349.5ms
+⏱️  search_eng_infrastructure      p50:  731.6ms | p95:  799.4ms | avg:  731.7ms
+⏱️  search_eng_algorithm           p50:  283.1ms | p95:  346.8ms | avg:  288.2ms
+⏱️  search_fuzzy_engineering       p50:  265.9ms | p95:  468.7ms | avg:  305.8ms
+⏱️  get_concept                    p50:   15.2ms | p95:   22.7ms | avg:   17.2ms
+⏱️  get_children                   p50:    9.8ms | p95:   16.0ms | avg:   11.1ms
+⏱️  get_children_large             p50:    5.2ms | p95:    6.8ms | avg:    5.4ms
+⏱️  get_parents                    p50:   13.7ms | p95:   20.1ms | avg:   14.1ms
+⏱️  paths_to_root                  p50:   14.7ms | p95:   18.2ms | avg:   15.0ms
+
+================================================================================
+📊 BENCHMARK SUMMARY (Mode: sample)
+================================================================================
+
+┌────────────────────────────────┬─────────┬─────────┬─────────┬─────────┐
+│ Scenario                       │ p50     │ p95     │ avg     │ max     │
+├────────────────────────────────┼─────────┼─────────┼─────────┼─────────┤
+│ search_eng_basic               │   498ms │   902ms │   562ms │  1248ms │
+│ search_eng_acronym             │   179ms │   237ms │   185ms │   267ms │
+│ search_eng_framework           │   340ms │   492ms │   349ms │   574ms │
+│ search_eng_infrastructure      │   732ms │   799ms │   732ms │   865ms │
+│ search_eng_algorithm           │   283ms │   347ms │   288ms │   361ms │
+│ search_fuzzy_engineering       │   266ms │   469ms │   306ms │   797ms │
+│ get_concept                    │    15ms │    23ms │    17ms │    73ms │
+│ get_children                   │    10ms │    16ms │    11ms │    23ms │
+│ get_children_large             │     5ms │     7ms │     5ms │     9ms │
+│ get_parents                    │    14ms │    20ms │    14ms │    25ms │
+│ paths_to_root                  │    15ms │    18ms │    15ms │    19ms │
+└────────────────────────────────┴─────────┴─────────┴─────────┴─────────┘
+
+📈 Overall: avg p50 = 214.1ms, avg p95 = 302.6ms
+   Iterations per scenario: 50 (+ 5 warmup)
+
+⏱️  Total benchmark time: 138.7s
+✅ Benchmark completed successfully!
+

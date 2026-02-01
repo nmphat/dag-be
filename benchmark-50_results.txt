@@ -1,0 +1,79 @@
+
+╔═══════════════════════════════════════════════════════════════════╗
+║           TAXONOMY EXPLORER - PERFORMANCE BENCHMARK               ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+🚀 Starting Benchmark Suite
+
+======================================================================
+🔧 TEST_MODE: ALL
+📋 Loaded 20 scenarios for execution.
+
+✅ API is available
+
+📥 Fetching sample concepts for navigation benchmarks...
+   Using conceptId: n_065172
+   Using parent:    n_065172
+   Using childId:   n_065172
+
+📊 Dataset Stats:
+   Total Nodes: 635,968
+   Total Edges: 752,687
+   Max Depth:   13
+
+⏱️  search_eng_basic               p50:  414.3ms | p95:  451.1ms | avg:  420.3ms
+⏱️  search_eng_acronym             p50:  207.7ms | p95:  231.5ms | avg:  209.8ms
+⏱️  search_eng_framework           p50:  319.0ms | p95:  366.4ms | avg:  323.7ms
+⏱️  search_eng_infrastructure      p50:  675.0ms | p95:  742.1ms | avg:  682.6ms
+⏱️  search_eng_algorithm           p50:  373.9ms | p95:  446.6ms | avg:  380.6ms
+⏱️  search_simple_disease          p50:  146.4ms | p95:  162.2ms | avg:  147.7ms
+⏱️  search_simple_syndrome         p50:  206.6ms | p95:  225.7ms | avg:  208.1ms
+⏱️  search_med_copd                p50: 1045.2ms | p95: 1247.1ms | avg: 1081.1ms
+⏱️  search_med_adhd                p50:  876.4ms | p95:  995.5ms | avg:  885.4ms
+⏱️  search_simple_chem             p50:   28.8ms | p95:   32.8ms | avg:   29.4ms
+⏱️  search_chem_heptachlor         p50:   26.6ms | p95:   30.3ms | avg:   27.0ms
+⏱️  search_chem_complex            p50:   33.4ms | p95:   37.2ms | avg:   33.6ms
+⏱️  search_cat_device              p50:  464.1ms | p95:  501.3ms | avg:  467.6ms
+⏱️  search_fuzzy_engineering       p50:  233.9ms | p95:  248.4ms | avg:  235.2ms
+⏱️  search_fuzzy_cancer            p50:  155.7ms | p95:  182.6ms | avg:  157.6ms
+⏱️  get_concept                    p50:    2.5ms | p95:    4.8ms | avg:    2.7ms
+⏱️  get_children                   p50:    2.4ms | p95:    4.1ms | avg:    2.5ms
+⏱️  get_children_large             p50:    2.4ms | p95:    4.3ms | avg:    2.5ms
+⏱️  get_parents                    p50:    3.5ms | p95:    4.8ms | avg:    3.6ms
+⏱️  paths_to_root                  p50:    2.1ms | p95:    3.1ms | avg:    2.2ms
+
+================================================================================
+📊 BENCHMARK SUMMARY (Mode: all)
+================================================================================
+
+┌────────────────────────────────┬─────────┬─────────┬─────────┬─────────┐
+│ Scenario                       │ p50     │ p95     │ avg     │ max     │
+├────────────────────────────────┼─────────┼─────────┼─────────┼─────────┤
+│ search_eng_basic               │   414ms │   451ms │   420ms │   469ms │
+│ search_eng_acronym             │   208ms │   231ms │   210ms │   249ms │
+│ search_eng_framework           │   319ms │   366ms │   324ms │   390ms │
+│ search_eng_infrastructure      │   675ms │   742ms │   683ms │   761ms │
+│ search_eng_algorithm           │   374ms │   447ms │   381ms │   462ms │
+│ search_simple_disease          │   146ms │   162ms │   148ms │   180ms │
+│ search_simple_syndrome         │   207ms │   226ms │   208ms │   236ms │
+│ search_med_copd                │  1045ms │  1247ms │  1081ms │  2360ms │
+│ search_med_adhd                │   876ms │   995ms │   885ms │  1059ms │
+│ search_simple_chem             │    29ms │    33ms │    29ms │    48ms │
+│ search_chem_heptachlor         │    27ms │    30ms │    27ms │    32ms │
+│ search_chem_complex            │    33ms │    37ms │    34ms │    41ms │
+│ search_cat_device              │   464ms │   501ms │   468ms │   520ms │
+│ search_fuzzy_engineering       │   234ms │   248ms │   235ms │   284ms │
+│ search_fuzzy_cancer            │   156ms │   183ms │   158ms │   203ms │
+│ get_concept                    │     3ms │     5ms │     3ms │     7ms │
+│ get_children                   │     2ms │     4ms │     3ms │     5ms │
+│ get_children_large             │     2ms │     4ms │     3ms │     5ms │
+│ get_parents                    │     4ms │     5ms │     4ms │     5ms │
+│ paths_to_root                  │     2ms │     3ms │     2ms │     4ms │
+└────────────────────────────────┴─────────┴─────────┴─────────┴─────────┘
+
+📈 Overall: avg p50 = 261.0ms, avg p95 = 296.1ms
+   Iterations per scenario: 50 (+ 5 warmup)
+
+⏱️  Total benchmark time: 291.9s
+✅ Benchmark completed successfully!
+

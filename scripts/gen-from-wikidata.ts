@@ -8,6 +8,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { ProxyAgent } from 'undici';
 
 type ConceptOut = {
   id: string; // VarChar(10) in Prisma
@@ -88,14 +89,26 @@ async function sparql(query: string) {
   url.searchParams.set('format', 'json');
   url.searchParams.set('query', query);
 
+  const proxyUrl = process.env.HTTPS_PROXY || process.env.http_proxy;
+  const dispatcher = proxyUrl ? new ProxyAgent(proxyUrl) : undefined;
+
   const res = await fetch(url.toString(), {
     headers: {
       'User-Agent': USER_AGENT,
       Accept: 'application/sparql-results+json',
     },
+    // @ts-ignore - undici dispatcher is supported in Node 18+ fetch
+    dispatcher,
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
+    if (res.status === 403) {
+      console.error(
+        `\n🛑 CRITICAL: Wikidata Forbidden (403). Your IP might be blocked or User-Agent is rejected.`,
+      );
+      console.error(`Response: ${text.slice(0, 300)}`);
+      process.exit(1); // Immediate stop to protect IP
+    }
     throw new Error(`WDQS error ${res.status}: ${text.slice(0, 300)}`);
   }
   return (await res.json()) as any;
@@ -202,6 +215,12 @@ LIMIT 1000
       const data = await sparql(query);
       const rows = data?.results?.bindings ?? [];
 
+      if (rows.length > 0) {
+        console.log(
+          `   [${rootLabel}] Batch size: ${parentQids.length} parents -> Found ${rows.length} children`,
+        );
+      }
+
       for (const row of rows) {
         if (produced >= MAX_PER_ROOT) break;
 
@@ -246,11 +265,12 @@ LIMIT 1000
         produced++;
       }
 
-      if (produced - lastLoggedProduced >= 500) {
-        console.log(
-          `[${rootLabel}] Produced: ${produced.toLocaleString()} concepts...`,
-        );
+      if (produced - lastLoggedProduced >= 100) {
         lastLoggedProduced = produced;
+        const queueSize = queue.length;
+        console.log(
+          `   🚀 [${rootLabel}] Total Produced: ${produced.toLocaleString()} | Queue Size: ${queueSize}`,
+        );
       }
 
       await sleep(RATE_LIMIT_MS);

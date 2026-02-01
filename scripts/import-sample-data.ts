@@ -28,7 +28,7 @@ const TRACKER_FILE = join(
   __dirname,
   '../docs/sample-data/from-wikidata/imported.txt',
 );
-const BASE_DATA_DIR = join(__dirname, '../docs/sample-data/from-wikidata');
+const BASE_DATA_DIR = join(__dirname, '../docs');
 
 async function main() {
   const args = process.argv.slice(2);
@@ -84,10 +84,23 @@ async function main() {
 
         console.log(`\n📥 Importing from: ${folder}...`);
 
-        const concepts: Concept[] = JSON.parse(
-          readFileSync(conceptsPath, 'utf-8'),
-        );
-        const edges: Edge[] = JSON.parse(readFileSync(edgesPath, 'utf-8'));
+        const rawConcepts = JSON.parse(readFileSync(conceptsPath, 'utf-8'));
+        const concepts: Concept[] = Array.isArray(rawConcepts)
+          ? rawConcepts
+          : rawConcepts.concepts || [];
+
+        const rawEdges = JSON.parse(readFileSync(edgesPath, 'utf-8'));
+        const edgesData = Array.isArray(rawEdges)
+          ? rawEdges
+          : rawEdges.edges || [];
+
+        // Normalize edges: support {parentId, childId} object or [parentId, childId] tuple
+        const edges: Edge[] = edgesData.map((e: any) => {
+          if (Array.isArray(e)) {
+            return { parentId: e[0], childId: e[1] };
+          }
+          return e;
+        });
 
         console.log(
           `   Found ${concepts.length} concepts, ${edges.length} edges.`,

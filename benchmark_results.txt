@@ -1,0 +1,80 @@
+
+╔═══════════════════════════════════════════════════════════════════╗
+║           TAXONOMY EXPLORER - PERFORMANCE BENCHMARK               ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+🚀 Starting Benchmark Suite
+
+======================================================================
+✅ API is available
+
+📥 Fetching sample concepts for navigation benchmarks...
+   Using conceptId: n_065172
+   Using parentWithManyChildren: n_065172
+   Using childId: n_065172
+
+📊 Dataset Stats:
+   Total Nodes: 635,968
+   Total Edges: 752,687
+   Max Depth: 13
+
+⏱️  search_simple_disease          p50:  160.4ms | p95:  246.3ms | avg:  171.0ms
+⏱️  search_simple_chem             p50:   39.8ms | p95:   63.2ms | avg:   40.6ms
+⏱️  search_user_engineering        p50:  276.5ms | p95:  308.4ms | avg:  274.9ms
+⏱️  search_complex_med_1           p50:  909.1ms | p95: 1073.4ms | avg:  923.7ms
+⏱️  search_complex_med_2           p50: 1452.1ms | p95: 1488.7ms | avg: 1449.4ms
+⏱️  search_complex_med_3           p50: 1398.7ms | p95: 1489.6ms | avg: 1404.9ms
+⏱️  search_complex_med_4           p50:  942.9ms | p95: 1121.4ms | avg:  956.0ms
+⏱️  search_chem_formula_1          p50:   34.7ms | p95:   37.4ms | avg:   34.9ms
+⏱️  search_chem_formula_2          p50:   24.7ms | p95:   26.6ms | avg:   24.8ms
+⏱️  search_chem_complex            p50:   33.3ms | p95:   37.2ms | avg:   33.5ms
+⏱️  search_fuzzy_cancer            p50:  152.6ms | p95:  161.3ms | avg:  152.8ms
+⏱️  search_fuzzy_syndrome          p50:  193.5ms | p95:  206.9ms | avg:  193.7ms
+⏱️  search_fuzzy_engineering       p50:  228.2ms | p95:  242.8ms | avg:  229.0ms
+⏱️  search_label_acid              p50:    7.7ms | p95:    8.8ms | avg:    7.7ms
+⏱️  search_level_deep              p50:  201.0ms | p95:  210.8ms | avg:  201.8ms
+⏱️  search_no_results              p50:   13.8ms | p95:   19.7ms | avg:   14.1ms
+⏱️  search_very_long_query         p50: 1592.9ms | p95: 1662.3ms | avg: 1597.0ms
+⏱️  get_concept                    p50:    1.7ms | p95:    2.3ms | avg:    1.8ms
+⏱️  get_children                   p50:    2.5ms | p95:    3.1ms | avg:    2.5ms
+⏱️  get_children_page50            p50:    2.3ms | p95:    3.3ms | avg:    2.4ms
+⏱️  get_parents                    p50:    4.3ms | p95:    6.2ms | avg:    4.4ms
+⏱️  paths_to_root                  p50:    2.1ms | p95:    3.0ms | avg:    2.2ms
+
+================================================================================
+📊 BENCHMARK SUMMARY (Dataset: 635,968 nodes)
+================================================================================
+
+┌────────────────────────────────┬─────────┬─────────┬─────────┬─────────┐
+│ Scenario                       │ p50     │ p95     │ avg     │ max     │
+├────────────────────────────────┼─────────┼─────────┼─────────┼─────────┤
+│ search_simple_disease          │   160ms │   246ms │   171ms │   246ms │
+│ search_simple_chem             │    40ms │    63ms │    41ms │    63ms │
+│ search_user_engineering        │   277ms │   308ms │   275ms │   308ms │
+│ search_complex_med_1           │   909ms │  1073ms │   924ms │  1073ms │
+│ search_complex_med_2           │  1452ms │  1489ms │  1449ms │  1489ms │
+│ search_complex_med_3           │  1399ms │  1490ms │  1405ms │  1490ms │
+│ search_complex_med_4           │   943ms │  1121ms │   956ms │  1121ms │
+│ search_chem_formula_1          │    35ms │    37ms │    35ms │    37ms │
+│ search_chem_formula_2          │    25ms │    27ms │    25ms │    27ms │
+│ search_chem_complex            │    33ms │    37ms │    33ms │    37ms │
+│ search_fuzzy_cancer            │   153ms │   161ms │   153ms │   161ms │
+│ search_fuzzy_syndrome          │   193ms │   207ms │   194ms │   207ms │
+│ search_fuzzy_engineering       │   228ms │   243ms │   229ms │   243ms │
+│ search_label_acid              │     8ms │     9ms │     8ms │     9ms │
+│ search_level_deep              │   201ms │   211ms │   202ms │   211ms │
+│ search_no_results              │    14ms │    20ms │    14ms │    20ms │
+│ search_very_long_query         │  1593ms │  1662ms │  1597ms │  1662ms │
+│ get_concept                    │     2ms │     2ms │     2ms │     2ms │
+│ get_children                   │     3ms │     3ms │     3ms │     3ms │
+│ get_children_page50            │     2ms │     3ms │     2ms │     3ms │
+│ get_parents                    │     4ms │     6ms │     4ms │     6ms │
+│ paths_to_root                  │     2ms │     3ms │     2ms │     3ms │
+└────────────────────────────────┴─────────┴─────────┴─────────┴─────────┘
+
+📈 Overall: avg p50 = 348.9ms, avg p95 = 382.8ms
+   Iterations per scenario: 20 (+ 5 warmup)
+
+⏱️  Total benchmark time: 194.9s
+✅ Benchmark completed successfully!
+
