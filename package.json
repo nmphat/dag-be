@@ -22,8 +22,10 @@
     "prisma:migrate": "prisma migrate dev",
     "docker:setup": "cp .env docker/.env && cd docker && docker-compose up -d && chmod +x setup-replication.sh && ./setup-replication.sh",
     "import:sample-data": "cp .env scripts && tsx scripts/import-sample-data.ts",
-    "db:upload": "ts-node scripts/import-sample-data.ts",
-    "db:reindex": "cp .env scripts && ts-node scripts/reindex.ts"
+    "gen-dump": "ts-node scripts/gen-dump.ts",
+    "gen-from-wikidata": "ts-node scripts/gen-from-wikidata.ts",
+    "db:import": "cp .env scripts && ts-node scripts/import-sample-data.ts",
+    "es:reindex": "cp .env scripts && ts-node scripts/reindex.ts"
   },
   "dependencies": {
     "@elastic/elasticsearch": "8.15.0",
