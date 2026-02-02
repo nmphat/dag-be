@@ -1,27 +1,18 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
-
-
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+# DAG - Taxonomy Explorer BE
 
 ## Description
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+
+## Prerequisites
+
+- Node.js v16 or newer (LTS recommended).
+- `pnpm` package manager (install with `npm i -g pnpm`).
+- Docker and Docker Compose (for running MariaDB, Elasticsearch, Redis).
+- A Linux environment or WSL2 on Windows (recommended). Many project scripts expect a Unix-like shell (`bash`) and Linux-style paths.
+- Bash / POSIX utilities (available in WSL, Git Bash, or a native Linux shell).
+
+Recommendation: run the project in a Linux environment or inside WSL2 on Windows. Running natively on Windows may require manual adjustments to scripts, path formats, and file permissions.
 
 ## Quick Start
 
@@ -43,6 +34,8 @@ pnpm install
 
 Download and extract sample Wikidata into the following directory:
 `/home/pc/0131/be/docs/sample-data/from-wikidata`
+
+Note: the path above is a Linux-style path. If you're on Windows, run these steps inside WSL2 (recommended) and place the data under the WSL filesystem (for example `/home/<your-user>/...`). If you prefer running natively on Windows, adjust paths accordingly and ensure your shell provides POSIX tools (e.g., Git Bash), though some scripts may still fail.
 
 **Expected Structure:**
 
