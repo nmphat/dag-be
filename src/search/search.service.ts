@@ -390,11 +390,27 @@ export class SearchService implements OnModuleInit {
     const must: any[] = [];
     if (query) {
       must.push({
-        multi_match: {
-          query,
-          fields: searchFields,
-          type: 'best_fields',
-          fuzziness: 'AUTO',
+        bool: {
+          should: [
+            {
+              multi_match: {
+                query,
+                fields: searchFields,
+                type: 'bool_prefix',
+                boost: 10,
+              },
+            },
+            {
+              multi_match: {
+                query,
+                fields: searchFields,
+                type: 'best_fields',
+                fuzziness: 'AUTO',
+                boost: 1,
+              },
+            },
+          ],
+          minimum_should_match: 1,
         },
       });
     } else {
