@@ -49,6 +49,7 @@ model Variant {
   @@index([conceptId], map: "idx_concept")
   @@index([name], map: "idx_name")
   @@fulltext([name], map: "idx_name_fulltext")
+  @@unique([conceptId, name])
   @@map("variants")
 }
 

@@ -25,6 +25,7 @@ CREATE TABLE `variants` (
     INDEX `idx_concept`(`concept_id`),
     INDEX `idx_name`(`name`),
     FULLTEXT INDEX `idx_name_fulltext`(`name`),
+    UNIQUE INDEX `variants_concept_id_name_key`(`concept_id`, `name`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
